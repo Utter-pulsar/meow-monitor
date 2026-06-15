@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src 'self' data:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    />
+    <title>摸鱼监控</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- draggable title bar -->
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <img id="bar-cat" class="bar-cat" alt="" />
+        <span class="bar-title">摸鱼监控</span>
+      </div>
+      <div class="win-controls">
+        <button id="btn-min" class="win-btn" title="最小化">–</button>
+        <button id="btn-close" class="win-btn win-close" title="关闭">×</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="hero">
+        <img id="hero-cat" class="hero-cat" alt="月薪喵" />
+        <h1 class="app-name">摸鱼监控</h1>
+        <p class="app-sub">把小猫和电脑状态丢到副屏上 🐟</p>
+      </section>
+
+      <section id="status" class="status-card stopped">
+        <span class="dot"></span>
+        <span id="status-text" class="status-text">未运行</span>
+      </section>
+
+      <section class="actions">
+        <button id="btn-start" class="btn btn-start">▶&nbsp;&nbsp;启动</button>
+        <button id="btn-stop" class="btn btn-stop" disabled>■&nbsp;&nbsp;停止</button>
+      </section>
+
+      <section class="settings">
+        <label class="row">
+          <span class="row-label">开机自启<small>登录系统时自动运行</small></span>
+          <span class="switch"><input type="checkbox" id="sw-autolaunch" /><span class="knob"></span></span>
+        </label>
+        <label class="row">
+          <span class="row-label">最小化到托盘<small>关闭窗口后在后台继续运行</small></span>
+          <span class="switch"><input type="checkbox" id="sw-minimize" /><span class="knob"></span></span>
+        </label>
+      </section>
+
+      <footer class="foot">
+        <button id="btn-update" class="btn-update">检查更新</button>
+        <span id="version" class="version">v0.0.0</span>
+      </footer>
+      <p id="update-msg" class="update-msg"></p>
+    </main>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

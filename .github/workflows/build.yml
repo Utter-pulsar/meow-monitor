@@ -1,0 +1,65 @@
+name: build
+
+# 推送一个版本 tag（例如 v0.0.1）→ 在云端打包 Windows x64 安装程序，并发布到对应 tag 的
+# GitHub Release。应用里的「检查更新」就是读取这些 Release 来判断有没有新版本。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # tag 必须和 package.json 的 version 一致，否则发布出来的版本号会对不上
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF_NAME#v}
+          PKG=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$PKG" ]; then echo "::error::Tag v$TAG 与 package.json 的 $PKG 不一致"; exit 1; fi
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Generate icon
+        run: npm run icon
+
+      - name: Package (Windows x64)
+        run: npx electron-builder --win --publish never
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: meow-monitor-windows
+          path: |
+            dist/*.exe
+            dist/latest*.yml
+            dist/*.blockmap
+          if-no-files-found: ignore
+
+  release:
+    needs: build-win
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          draft: false
+          generate_release_notes: true

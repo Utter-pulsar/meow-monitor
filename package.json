@@ -1,0 +1,30 @@
+{
+  "name": "meow-monitor",
+  "productName": "摸鱼监控",
+  "version": "0.0.1",
+  "description": "摸鱼监控 — 把「月薪喵」小猫和电脑硬件状态一起投到 TURZX 8.8 寸副屏上的桌面小程序。",
+  "author": "Utter-pulsar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Utter-pulsar/meow-monitor.git"
+  },
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "monitor": "node src/monitor.js",
+    "icon": "node scripts/make-icon.js",
+    "dist:win": "electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@napi-rs/canvas": "^1.0.0",
+    "node-forge": "^1.4.0",
+    "systeminformation": "^5.31.7",
+    "usb": "^2.18.0"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

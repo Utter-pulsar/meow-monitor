@@ -1,0 +1,58 @@
+appId: com.moyu.monitor
+productName: 摸鱼监控
+copyright: Copyright © 2026
+
+directories:
+  buildResources: build
+  output: dist
+
+# Bundle the GUI, the engine source, the cat + fonts, and the production node_modules.
+# Only docs / dev junk are stripped. (electron-builder always ships production dependencies.)
+files:
+  - electron/**/*
+  - src/**/*
+  - assets/**/*
+  - fonts/**/*
+  - package.json
+  - '!scripts/**'
+  - '!docs/**'
+  - '!images/**'
+  - '!.github/**'
+  - '!build/**'
+  - '!**/*.md'
+  - '!.gitignore'
+  - '!electron-builder.yml'
+
+# These are opened off real disk — by ffmpeg (cat.GIF), by @napi-rs/canvas's native font
+# loader (the .ttf/.woff2), and as native .node addons (usb, canvas) — so they cannot live
+# inside the asar archive.
+asarUnpack:
+  - '**/*.node'
+  - assets/**
+  - fonts/**
+  - node_modules/@ffmpeg-installer/**
+  - node_modules/@napi-rs/**
+  - node_modules/usb/**
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 摸鱼监控
+  artifactName: meow-monitor-${version}-setup.${ext}
+
+# electron-updater is NOT used (the app checks GitHub Releases itself), but keeping the feed
+# config here lets the build still emit latest.yml and makes a future migration trivial.
+publish:
+  provider: github
+  owner: Utter-pulsar
+  repo: meow-monitor

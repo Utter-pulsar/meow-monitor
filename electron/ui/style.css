@@ -1,0 +1,148 @@
+/* 摸鱼监控 — hand-drawn paper UI in the DoodlePilot spirit: Excalifont, warm paper, soft
+   uniformly-rounded cards, an inky border, and a 3px offset doodle shadow. Excalifont is
+   injected from preload as a data URL. */
+:root {
+  --paper: #fbf7ef;
+  --ink: #2b2b2b;
+  --card: #ffffff;
+  --muted: #8a8478;
+  --shadow: rgba(43, 43, 43, 0.85);
+  --green: #7bc950;
+  --coral: #ff6b6b;
+  --blue: #5b8def;
+  --yellow: #ffd23f;
+  --grain: rgba(43, 43, 43, 0.05);
+  --track: #e7e0d2;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  font-family: 'Excalifont', 'Xiaolai', 'Microsoft YaHei', 'PingFang SC', system-ui, sans-serif;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image: radial-gradient(var(--grain) 1px, transparent 1px);
+  background-size: 18px 18px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ---- title bar ---- */
+.titlebar {
+  -webkit-app-region: drag;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 14px;
+}
+.titlebar-left { display: flex; align-items: center; gap: 8px; }
+.bar-cat { width: 22px; height: 22px; object-fit: contain; }
+.bar-title { font-size: 14px; font-weight: 700; letter-spacing: 0.5px; }
+.win-controls { -webkit-app-region: no-drag; display: flex; gap: 4px; }
+.win-btn {
+  width: 30px; height: 28px;
+  border: none; background: transparent; color: var(--ink);
+  font-size: 17px; line-height: 1; cursor: pointer; border-radius: 9px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.win-btn:hover { background: rgba(43, 43, 43, 0.1); }
+.win-close:hover { background: var(--coral); color: #fff; }
+
+/* ---- content ---- */
+.content { padding: 6px 22px 22px; display: flex; flex-direction: column; gap: 18px; }
+
+.hero { text-align: center; }
+.hero-cat {
+  width: 104px; height: 104px; object-fit: contain;
+  filter: drop-shadow(2px 3px 0 rgba(43, 43, 43, 0.16));
+}
+.app-name { margin: 8px 0 3px; font-size: 32px; font-weight: 700; letter-spacing: 1px; }
+.app-sub { margin: 0; font-size: 13px; color: var(--muted); }
+
+/* ---- status ---- */
+.status-card {
+  display: flex; align-items: center; gap: 11px;
+  padding: 13px 18px;
+  background: var(--card);
+  border: 2.5px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 3px 3px 0 0 var(--shadow);
+}
+.status-card .dot {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid var(--ink); background: var(--muted); flex: none;
+}
+.status-text { font-size: 14.5px; }
+.status-card.running  .dot { background: var(--green); }
+.status-card.starting .dot { background: var(--yellow); animation: blink 0.9s ease-in-out infinite; }
+.status-card.error    .dot { background: var(--coral); }
+.status-card.stopped  .dot { background: var(--muted); }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+/* ---- action buttons ---- */
+.actions { display: flex; gap: 14px; }
+.btn {
+  flex: 1; padding: 13px 0;
+  font-family: inherit; font-size: 17px; font-weight: 700;
+  color: var(--ink); cursor: pointer;
+  border: 2.5px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 3px 3px 0 0 var(--shadow);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-start { background: var(--green); }
+.btn-stop  { background: var(--coral); }
+.btn:not(:disabled):hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 var(--shadow); }
+.btn:not(:disabled):active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 var(--shadow); }
+.btn:disabled { opacity: 0.4; cursor: default; box-shadow: 2px 2px 0 0 rgba(43, 43, 43, 0.4); }
+
+/* ---- settings rows ---- */
+.settings { display: flex; flex-direction: column; }
+.row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 4px; cursor: pointer;
+  border-bottom: 2px dashed rgba(43, 43, 43, 0.16);
+}
+.row:last-child { border-bottom: none; }
+.row-label { display: flex; flex-direction: column; font-size: 15.5px; font-weight: 700; }
+.row-label small { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 3px; }
+
+/* ---- toggle switch (smooth pill) ---- */
+.switch {
+  position: relative; width: 54px; height: 30px; flex: none;
+  background: var(--track);
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
+  transition: background 0.18s ease;
+}
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 21px; height: 21px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--ink);
+  transition: left 0.18s ease;
+}
+/* visual driven by a JS-applied .on class (reliable across Chromium :has() invalidation) */
+.switch.on { background: var(--green); }
+.switch.on .knob { left: 26px; }
+
+/* ---- footer ---- */
+.foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.btn-update {
+  font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer;
+  color: var(--ink); background: var(--card);
+  border: 2.5px solid var(--ink); border-radius: 13px;
+  padding: 8px 16px; box-shadow: 2px 2px 0 0 var(--shadow);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-update:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 var(--shadow); }
+.btn-update:active { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--shadow); }
+.version { font-size: 13px; color: var(--muted); }
+.update-msg { margin: 2px 0 0; min-height: 18px; font-size: 13px; color: var(--muted); }
+.update-msg.ok { color: var(--green); }
+.update-msg.err { color: var(--coral); }
+.update-msg a { color: var(--blue); cursor: pointer; }
