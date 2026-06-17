@@ -13,6 +13,9 @@
   "scripts": {
     "start": "electron .",
     "monitor": "node src/monitor.js",
+    "extend": "electron scripts/m1-extend2.js",
+    "extend:slow": "electron scripts/m1-extend.js",
+    "extend:stop": "node -e \"const p=require('path'),os=require('os'),fs=require('fs');fs.writeFileSync(p.join(os.tmpdir(),'moyu-m0','STOP'),'');console.log('STOP written')\"",
     "icon": "node scripts/make-icon.js",
     "dist:win": "electron-builder --win --publish never"
   },

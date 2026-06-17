@@ -1,17 +1,28 @@
 // 摸鱼监控 — Electron control panel.
-// A tiny hand-drawn window that starts/stops the monitor engine (SalaryCat + hardware dashboard
-// streamed to the TURZX bar screen), toggles launch-at-login / minimize-to-tray, and checks
-// GitHub Releases for updates. The heavy USB/render loop runs in a separate utilityProcess.
+// A tiny hand-drawn window that starts/stops either the monitor engine (SalaryCat + hardware
+// dashboard streamed to the TURZX bar screen) or the "extend screen" engine (TURZX becomes a real
+// Windows extended desktop), toggles launch-at-login / minimize-to-tray, and checks GitHub Releases
+// for updates. The dashboard USB/render loop runs in a separate utilityProcess; the extend-screen
+// capture runs in the main process (it needs Chromium's desktopCapturer).
 const fs = require('node:fs');
 const path = require('node:path');
 const https = require('node:https');
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProcess } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProcess, screen } = require('electron');
+const os = require('node:os');
+const { ExtendEngine } = require('../src/extend');
+const vdd = require('../src/vdd');
+
+// Log main-process crashes to a file (Electron's GUI stdout doesn't reach the terminal on Windows).
+const MAIN_ERR_LOG = path.join(os.tmpdir(), 'moyu-main-error.log');
+function logMainErr(tag, e) { try { fs.appendFileSync(MAIN_ERR_LOG, `[${new Date().toISOString()}] ${tag}: ${(e && e.stack) || e}\n`); } catch {} }
+process.on('uncaughtException', (e) => logMainErr('uncaughtException', e));
+process.on('unhandledRejection', (e) => logMainErr('unhandledRejection', e));
 
 const ICON_PATH = path.join(__dirname, 'ui', 'icon.png');
 const ENGINE_ENTRY = path.join(__dirname, '..', 'src', 'engine-entry.js');
 
 // ---- settings (a small JSON file in userData) ------------------------------------------
-const DEFAULTS = { minimizeToTray: true, launchAtLogin: false, fps: 12 };
+const DEFAULTS = { minimizeToTray: true, launchAtLogin: false, fps: 12, mode: 'dashboard', extendQuality: 150 };
 let settings = { ...DEFAULTS };
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
@@ -22,7 +33,8 @@ function saveSettings() { try { fs.writeFileSync(settingsPath(), JSON.stringify(
 
 let mainWindow = null;
 let tray = null;
-let engine = null;
+let engine = null;          // dashboard utilityProcess
+let extend = null;          // ExtendEngine (extend-screen mode)
 let lastStatus = { state: 'stopped', message: '未运行' };
 let quitting = false;
 
@@ -32,15 +44,19 @@ function iconImage() {
   catch { return nativeImage.createEmpty(); }
 }
 
-// ---- engine (utilityProcess: native modules load against Electron, loop never blocks UI) --
+function setStatus(state, message) {
+  lastStatus = { state, message };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('engine:status', lastStatus);
+  updateTrayMenu();
+}
+
+// ---- dashboard engine (utilityProcess) --------------------------------------------------
 function ensureEngine() {
   if (engine) return engine;
   engine = utilityProcess.fork(ENGINE_ENTRY, [], { serviceName: 'moyu-engine' });
   engine.on('message', (msg) => {
     if (!msg || msg.type !== 'status') return;
-    lastStatus = { state: msg.state, message: msg.message };
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('engine:status', lastStatus);
-    updateTrayMenu();
+    setStatus(msg.state, msg.message);
   });
   engine.on('exit', () => { engine = null; });
   return engine;
@@ -48,18 +64,24 @@ function ensureEngine() {
 function engineStart() { ensureEngine().postMessage({ type: 'start', fps: settings.fps }); }
 function engineStop() { if (engine) engine.postMessage({ type: 'stop' }); }
 
+// ---- extend-screen engine (main process) ------------------------------------------------
+function getExtend() { if (!extend) extend = new ExtendEngine(); return extend; }
+async function extendStart() { engineStop(); await getExtend().start({ fps: settings.fps, target: settings.extendQuality, onStatus: setStatus }); }
+async function extendStop() { if (extend) await extend.stop({ turnOffScreen: true }); }
+const extendRunning = () => !!(extend && (extend.running || extend.dev));
+
 // ---- window -----------------------------------------------------------------------------
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 380, height: 660,
+    width: 380, height: settings.mode === 'extend' ? 720 : 640,
     resizable: false, maximizable: false, fullscreenable: false,
     frame: false, show: false, backgroundColor: '#FBF7EF', title: '摸鱼监控',
     icon: iconImage(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, nodeIntegration: false,
-      // the preload reads the cat GIF + Excalifont off disk via fs; a sandboxed preload
-      // can't require('fs'), so disable the sandbox (we only ever load local files).
+      // the preload reads the cat GIF + fonts off disk via fs; a sandboxed preload can't
+      // require('fs'), so disable the sandbox (we only ever load local files).
       sandbox: false,
     },
   });
@@ -73,6 +95,10 @@ function showWindow() {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
   else { mainWindow.show(); mainWindow.focus(); }
 }
+function resizeForMode(mode) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try { mainWindow.setContentSize(380, mode === 'extend' ? 720 : 640); } catch {}
+}
 
 // ---- tray -------------------------------------------------------------------------------
 function updateTrayMenu() {
@@ -81,8 +107,8 @@ function updateTrayMenu() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '显示主界面', click: showWindow },
     { type: 'separator' },
-    { label: '启动', enabled: !running, click: engineStart },
-    { label: '停止', enabled: running, click: engineStop },
+    { label: '启动', enabled: !running, click: () => onStart() },
+    { label: '停止', enabled: running, click: () => onStop() },
     { type: 'separator' },
     { label: '退出', click: () => app.quit() },
   ]));
@@ -92,6 +118,16 @@ function createTray() {
   tray = new Tray(iconImage().resize({ width: 16, height: 16 }));
   tray.on('click', showWindow);
   updateTrayMenu();
+}
+
+// ---- start/stop routed by the active mode -----------------------------------------------
+async function onStart() {
+  if (settings.mode === 'extend') await extendStart();
+  else { if (extendRunning()) await extendStop(); engineStart(); }
+}
+async function onStop() {
+  if (settings.mode === 'extend') await extendStop();
+  else engineStop();
 }
 
 // ---- update check (GitHub Releases, no extra dependency) --------------------------------
@@ -135,8 +171,8 @@ function checkUpdate() {
 }
 
 // ---- IPC --------------------------------------------------------------------------------
-ipcMain.handle('engine:start', () => { engineStart(); return true; });
-ipcMain.handle('engine:stop', () => { engineStop(); return true; });
+ipcMain.handle('engine:start', async () => { await onStart(); return true; });
+ipcMain.handle('engine:stop', async () => { await onStop(); return true; });
 ipcMain.handle('engine:status', () => lastStatus);
 ipcMain.handle('settings:get', () => ({ ...settings, version: app.getVersion() }));
 ipcMain.handle('settings:setMinimize', (_e, v) => { settings.minimizeToTray = !!v; saveSettings(); return settings.minimizeToTray; });
@@ -145,9 +181,43 @@ ipcMain.handle('settings:setAutoLaunch', (_e, v) => {
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
   return settings.launchAtLogin;
 });
+
+// mode + extend-screen arrangement
+ipcMain.handle('mode:get', () => settings.mode);
+ipcMain.handle('mode:set', async (_e, m) => {
+  const next = m === 'extend' ? 'extend' : 'dashboard';
+  if (next !== settings.mode) {
+    if (extendRunning()) await extendStop();
+    engineStop();
+    settings.mode = next; saveSettings();
+    setStatus('stopped', '未运行');
+  }
+  resizeForMode(next);
+  return settings.mode;
+});
+ipcMain.handle('vdd:ready', () => vdd.isReady());
+ipcMain.handle('vdd:displays', () => {
+  const prim = screen.getPrimaryDisplay().id;
+  const v = vdd.findDisplay();
+  return {
+    displays: screen.getAllDisplays().map((d) => ({ id: d.id, bounds: d.bounds, label: d.label, primary: d.id === prim })),
+    virtualId: v ? v.id : null,
+  };
+});
+ipcMain.handle('vdd:setPosition', async (_e, x, y) => { await vdd.setPosition(x, y); return true; });
+ipcMain.handle('extend:getQuality', () => settings.extendQuality);
+ipcMain.handle('extend:setQuality', (_e, kb) => {
+  const v = Math.max(8, Math.min(512, Number(kb) || 56));
+  settings.extendQuality = v; saveSettings();
+  if (extend) extend.setQuality(v);
+  return v;
+});
+
 ipcMain.handle('update:check', () => checkUpdate());
 ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(url));
-ipcMain.on('window:minimize', () => { if (settings.minimizeToTray) mainWindow.hide(); else mainWindow.minimize(); });
+// minimize always minimizes to the taskbar; close hides to tray (background) only when the
+// "minimize to tray" setting is on, otherwise it quits.
+ipcMain.on('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('window:close', () => { if (settings.minimizeToTray) mainWindow.hide(); else app.quit(); });
 
 // ---- lifecycle --------------------------------------------------------------------------
@@ -165,16 +235,22 @@ if (!app.requestSingleInstanceLock()) {
   });
   app.on('window-all-closed', () => { if (!settings.minimizeToTray) app.quit(); });
 
-  // Quit cleanly: hold the quit, tell the engine to release the USB panel, and only then exit.
-  // A kill() fallback guarantees we still quit if the device teardown ever hangs.
+  // Quit cleanly: stop the extend engine (release USB + turn the virtual screen off) and tell the
+  // dashboard engine to release the panel, only then exit. kill() fallbacks guarantee we still quit.
   let shuttingDown = false;
   app.on('before-quit', (e) => {
-    quitting = true; // let the window 'close' handler stop re-hiding to tray
-    if (shuttingDown || !engine) return; // cleanup done/none -> allow the quit to proceed
+    quitting = true;
+    if (shuttingDown) return;
+    if (!engine && !extendRunning()) return; // nothing to clean up -> let the quit proceed
     shuttingDown = true;
     e.preventDefault();
-    engine.once('exit', () => app.quit());
-    try { engine.postMessage({ type: 'shutdown' }); } catch { app.quit(); }
-    setTimeout(() => { try { engine && engine.kill(); } catch {} }, 3000);
+    (async () => {
+      if (extendRunning()) { try { await extend.stop({ turnOffScreen: true }); } catch {} }
+      if (engine) {
+        engine.once('exit', () => app.quit());
+        try { engine.postMessage({ type: 'shutdown' }); } catch { app.quit(); }
+        setTimeout(() => { try { engine && engine.kill(); } catch {} }, 3000);
+      } else { app.quit(); }
+    })();
   });
 }

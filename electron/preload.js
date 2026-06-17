@@ -11,9 +11,18 @@ function dataUrl(rel, mime) {
   } catch { return ''; }
 }
 
+function fontBytes(rel) {
+  try { return fs.readFileSync(path.join(__dirname, '..', rel)); } catch { return null; }
+}
+
 contextBridge.exposeInMainWorld('moyu', {
   catGif: dataUrl('assets/cat.GIF', 'image/gif'),
   excalifont: dataUrl('fonts/Excalifont-Regular.woff2', 'font/woff2'),
+  // Xiaolai (小赖) is a ~22 MB CJK TTF — too big to inline as a base64 data URL. Hand the raw
+  // bytes to the renderer, which registers them via the FontFace API so the whole control panel
+  // is hand-drawn (Excalifont for Latin/digits, Xiaolai for Chinese) instead of falling back to
+  // the system Microsoft YaHei. Lazy: only read when the renderer asks for it.
+  xiaolai: () => fontBytes('fonts/Xiaolai-Regular.ttf'),
 
   start: () => ipcRenderer.invoke('engine:start'),
   stop: () => ipcRenderer.invoke('engine:stop'),
@@ -23,6 +32,15 @@ contextBridge.exposeInMainWorld('moyu', {
   setAutoLaunch: (v) => ipcRenderer.invoke('settings:setAutoLaunch', v),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+
+  // mode + extend-screen
+  getMode: () => ipcRenderer.invoke('mode:get'),
+  setMode: (m) => ipcRenderer.invoke('mode:set', m),
+  vddReady: () => ipcRenderer.invoke('vdd:ready'),
+  vddDisplays: () => ipcRenderer.invoke('vdd:displays'),
+  vddSetPosition: (x, y) => ipcRenderer.invoke('vdd:setPosition', x, y),
+  extendGetQuality: () => ipcRenderer.invoke('extend:getQuality'),
+  extendSetQuality: (kb) => ipcRenderer.invoke('extend:setQuality', kb),
 
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),

@@ -1,0 +1,101 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>extend capture</title></head>
+  <body>
+    <script>
+      // Hidden renderer: capture the target virtual display, rotate into the panel-native 464x1920,
+      // and PNG-encode it — but KEEP THE PNG SMALL. The panel's frame buffer truncates large PNGs
+      // (a photo wallpaper is ~2.3 MB) which shows as 花屏, while the dashboard's flat ~46 KB PNGs
+      // display fine. So we adaptively reduce detail (downscale + posterize) until the PNG is near
+      // the dashboard's proven size, then send it via cmd 0x66.
+      const { ipcRenderer } = require('electron');
+      const p = new URLSearchParams(location.search);
+      const sid = p.get('sid');
+      const FPS = Number(p.get('fps') || 10);
+      const CH = p.get('channel') || 'extend:frame';
+      const W = 1920, H = 464, DW = 464, DH = 1920;
+      let TARGET = Number(p.get('target') || 56) * 1024; // keep PNG under the panel's safe size
+      // live quality changes from the control panel (KB) — no restart needed
+      ipcRenderer.on('extend:target', (_e, kb) => { TARGET = Math.max(8, Number(kb) || 56) * 1024; });
+
+      navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: {
+          chromeMediaSource: 'desktop', chromeMediaSourceId: sid,
+          minWidth: W, maxWidth: W, minHeight: H, maxHeight: H, maxFrameRate: 30,
+        } },
+      }).then(async (stream) => {
+        const v = document.createElement('video');
+        v.srcObject = stream; v.muted = true;
+        await v.play();
+
+        const tmp = document.createElement('canvas');
+        const land = document.createElement('canvas'); land.width = W; land.height = H;
+        const lc = land.getContext('2d', { alpha: false });
+        const dev = document.createElement('canvas'); dev.width = DW; dev.height = DH;
+        const dc = dev.getContext('2d', { alpha: false });
+
+        // progressively more aggressive: {downscale fraction, color-bit mask}
+        const TRIES = [
+          { s: 1, m: 0xf0 }, { s: 1, m: 0xe0 }, { s: 0.6, m: 0xe0 },
+          { s: 0.45, m: 0xc0 }, { s: 0.33, m: 0xc0 }, { s: 0.25, m: 0x80 },
+        ];
+
+        function render(s, m) {
+          if (s < 1) {
+            const sw = Math.max(4, Math.round(W * s)), sh = Math.max(4, Math.round(H * s));
+            tmp.width = sw; tmp.height = sh;
+            tmp.getContext('2d', { alpha: false }).drawImage(v, 0, 0, sw, sh);
+            lc.drawImage(tmp, 0, 0, W, H);
+          } else {
+            lc.drawImage(v, 0, 0, W, H);
+          }
+          dc.save();
+          dc.translate(DW, 0); dc.rotate(Math.PI / 2); // cw, matches dashboard
+          dc.drawImage(land, 0, 0);
+          dc.restore();
+          if (m !== 0xff) {
+            const id = dc.getImageData(0, 0, DW, DH), d = id.data;
+            for (let j = 0; j < d.length; j += 4) { d[j] &= m; d[j + 1] &= m; d[j + 2] &= m; }
+            dc.putImageData(id, 0, 0);
+          }
+          return dev.toDataURL('image/png');
+        }
+
+        // one-time probe: log the PNG size at each quality level so we can choose the best TARGET
+        (function probe() {
+          const sm = [
+            { s: 1, m: 0xff }, { s: 1, m: 0xf0 }, { s: 1, m: 0xe0 },
+            { s: 0.6, m: 0xe0 }, { s: 0.45, m: 0xc0 }, { s: 0.33, m: 0xc0 }, { s: 0.25, m: 0x80 },
+          ];
+          try {
+            const out = sm.map((t) => `s${t.s}m${t.m.toString(16)}=${Math.round((render(t.s, t.m).length - 22) * 0.75 / 1024)}KB`);
+            ipcRenderer.send('extend:rlog', 'probe ' + out.join('  '));
+          } catch (e) {}
+        })();
+
+        let inflight = false;
+        setInterval(() => {
+          if (inflight) return;
+          inflight = true;
+          try {
+            let url = '', lvl = 0;
+            for (lvl = 0; lvl < TRIES.length; lvl++) {
+              url = render(TRIES[lvl].s, TRIES[lvl].m);
+              const bytes = Math.floor((url.length - 22) * 0.75);
+              if (bytes <= TARGET || lvl === TRIES.length - 1) break;
+            }
+            const b64 = url.slice(url.indexOf(',') + 1);
+            const bin = atob(b64);
+            const arr = new Uint8Array(bin.length);
+            for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+            ipcRenderer.send(CH, arr, lvl);
+          } catch (e) {
+            try { ipcRenderer.send('extend:rerr', String((e && e.message) || e)); } catch (x) {}
+          }
+          inflight = false;
+        }, Math.max(1, Math.round(1000 / FPS)));
+      }).catch((e) => { try { ipcRenderer.send('extend:rerr', String((e && e.message) || e)); } catch (x) {} });
+    </script>
+  </body>
+</html>

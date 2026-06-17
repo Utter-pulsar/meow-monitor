@@ -29,14 +29,27 @@
         <p class="app-sub">把小猫和电脑状态丢到副屏上 🐟</p>
       </section>
 
-      <section id="status" class="status-card stopped">
-        <span class="dot"></span>
-        <span id="status-text" class="status-text">未运行</span>
+      <section class="mode">
+        <button id="mode-dash" class="seg">📊&nbsp;仪表盘</button>
+        <button id="mode-ext" class="seg">🖥️&nbsp;扩展屏</button>
       </section>
 
-      <section class="actions">
-        <button id="btn-start" class="btn btn-start">▶&nbsp;&nbsp;启动</button>
-        <button id="btn-stop" class="btn btn-stop" disabled>■&nbsp;&nbsp;停止</button>
+      <section class="run-row">
+        <button id="arr-open" class="btn-open" hidden>🖥️&nbsp;显示设置</button>
+        <div id="status" class="status-card stopped">
+          <span class="dot"></span>
+          <span id="status-text" class="status-text">未运行</span>
+          <label class="switch" id="run-switch"><input type="checkbox" id="sw-run" /><span class="knob"></span></label>
+        </div>
+      </section>
+
+      <section id="qual-box" class="qual-box" hidden>
+        <div class="qual-head"><span>清晰度</span><span id="qual-val" class="qual-val"></span></div>
+        <div class="qual-track" id="qual-track">
+          <div class="qual-fill" id="qual-fill"></div>
+          <div class="qual-knob" id="qual-knob"></div>
+        </div>
+        <div class="qual-ends"><span>流畅 · 糊</span><span>清晰 · 慢</span></div>
       </section>
 
       <section class="settings">

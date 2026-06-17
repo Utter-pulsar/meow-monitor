@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>m1 capture</title></head>
+  <body>
+    <script>
+      // Hidden renderer: continuously capture the target virtual display via getUserMedia,
+      // rotate each frame into the panel-native 464x1920, PNG-encode, and hand it to main over IPC.
+      const { ipcRenderer } = require('electron');
+      const p = new URLSearchParams(location.search);
+      const sid = p.get('sid');
+      const FPS = Number(p.get('fps') || 12);
+      const W = 1920, H = 464, DW = 464, DH = 1920;
+
+      ipcRenderer.send('rlog', 'renderer start sid=' + sid + ' fps=' + FPS);
+
+      navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: {
+          chromeMediaSource: 'desktop', chromeMediaSourceId: sid,
+          minWidth: W, maxWidth: W, minHeight: H, maxHeight: H, maxFrameRate: 30,
+        } },
+      }).then(async (stream) => {
+        const v = document.createElement('video');
+        v.srcObject = stream; v.muted = true;
+        await v.play();
+        ipcRenderer.send('rlog', 'video playing ' + v.videoWidth + 'x' + v.videoHeight);
+
+        const land = document.createElement('canvas'); land.width = W; land.height = H;
+        const lc = land.getContext('2d', { alpha: false });
+        const dev = document.createElement('canvas'); dev.width = DW; dev.height = DH;
+        const dc = dev.getContext('2d', { alpha: false });
+
+        let inflight = false;
+        setInterval(() => {
+          if (inflight) return; // drop frame if the previous PNG hasn't been handed off yet
+          lc.drawImage(v, 0, 0, W, H);
+          dc.save();
+          dc.translate(DW, 0); dc.rotate(Math.PI / 2); // cw, matches dashboard + v1
+          dc.drawImage(land, 0, 0);
+          dc.restore();
+          inflight = true;
+          dev.toBlob(async (b) => {
+            try { ipcRenderer.send('frame', new Uint8Array(await b.arrayBuffer())); } catch (e) {}
+            inflight = false;
+          }, 'image/png');
+        }, Math.max(1, Math.round(1000 / FPS)));
+      }).catch((e) => ipcRenderer.send('rerr', String((e && e.message) || e)));
+    </script>
+  </body>
+</html>

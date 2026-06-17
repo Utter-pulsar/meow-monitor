@@ -53,7 +53,7 @@ body {
 .win-close:hover { background: var(--coral); color: #fff; }
 
 /* ---- content ---- */
-.content { padding: 6px 22px 22px; display: flex; flex-direction: column; gap: 18px; }
+.content { padding: 6px 22px 18px; display: flex; flex-direction: column; gap: 13px; }
 
 .hero { text-align: center; }
 .hero-cat {
@@ -146,3 +146,60 @@ body {
 .update-msg.ok { color: var(--green); }
 .update-msg.err { color: var(--coral); }
 .update-msg a { color: var(--blue); cursor: pointer; }
+
+/* ---- mode segmented control ---- */
+.mode {
+  display: flex; border: 2.5px solid var(--ink); border-radius: 16px;
+  overflow: hidden; box-shadow: 3px 3px 0 0 var(--shadow);
+}
+.seg {
+  flex: 1; padding: 11px 0; font-family: inherit; font-size: 15px; font-weight: 700;
+  color: var(--ink); background: var(--card); border: none; cursor: pointer; transition: background 0.12s ease;
+}
+.seg + .seg { border-left: 2.5px solid var(--ink); }
+.seg.seg-on { background: var(--yellow); }
+.seg:not(.seg-on):hover { background: rgba(43, 43, 43, 0.06); }
+
+/* ---- run on/off switch sits at the right of the status card ---- */
+.status-card .switch { margin-left: auto; }
+
+/* ---- run row: [打开显示设置 | status + start/stop switch] ---- */
+.run-row { display: flex; gap: 12px; align-items: stretch; }
+#status.status-card { flex: 1; min-width: 0; }
+.status-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-open {
+  flex: 1; font-family: inherit; font-size: 14.5px; font-weight: 700; color: var(--ink);
+  background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px;
+  box-shadow: 3px 3px 0 0 var(--shadow); cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-open[hidden] { display: none; }
+.btn-open:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 0 var(--shadow); }
+.btn-open:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 var(--shadow); }
+
+/* ---- clarity slider (hand-drawn, draggable) ---- */
+.qual-box {
+  display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 10px;
+  background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px;
+  box-shadow: 3px 3px 0 0 var(--shadow);
+}
+.qual-box[hidden] { display: none; }
+.qual-head { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; }
+.qual-val { font-weight: 400; color: var(--muted); }
+.qual-track {
+  position: relative; height: 14px; margin: 8px 11px 4px;
+  background: var(--track); border: 2.5px solid var(--ink); border-radius: 999px; cursor: pointer;
+}
+.qual-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); border-radius: 999px; }
+.qual-knob {
+  position: absolute; top: 50%; left: 0; width: 22px; height: 22px; margin-left: -11px;
+  transform: translateY(-50%); background: #fff; border: 2.5px solid var(--ink); border-radius: 50%;
+  cursor: grab; box-shadow: 1px 1px 0 0 var(--shadow);
+}
+.qual-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+/* let the content scroll if a mode's panel is taller than the window */
+body { display: flex; flex-direction: column; }
+.titlebar { flex: none; }
+.content { flex: 1 1 auto; overflow-y: auto; }
+.content > * { flex: none; } /* keep each section at its natural height; let .content scroll instead of squishing rows */

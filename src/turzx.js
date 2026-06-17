@@ -21,7 +21,8 @@ const CMD = {
   QueryStatus: 0x11,   // startup status query
   BeginSession: 0x34,  // payload[8] = 0, right before first frame
   EnableMode: 0x33,    // payload[8..14]=date/time, payload[15]=mode (1=image, 2=video, 0=stop)
-  SendImage: 0x66,     // PNG image frame: header[8..11] = BE length, PNG body appended (0x65 = JPEG)
+  SendImage: 0x66,     // PNG image frame: header[8..11] = BE length, PNG body appended
+  SendImageJpeg: 0x65, // JPEG image frame (smaller than PNG for photographic / desktop content)
   StopPlay: 0x6f,      // stop standalone playback
   Init: 0x70,          // startup init (no param)
   StatusPoll: 0x7a,    // back-pressure poll between frames (reply[8] is the queue depth)
@@ -139,6 +140,12 @@ class TurzxDevice {
   async sendImage(img) {
     const header = this._buildCmd(CMD.SendImage, (p) => { p.writeUInt32BE(img.length >>> 0, 8); });
     return this._roundtrip(Buffer.concat([header, img]), CMD.SendImage);
+  }
+
+  /** Send one JPEG frame (cmd 0x65). Much smaller than PNG for photographic/desktop content. */
+  async sendImageJpeg(img) {
+    const header = this._buildCmd(CMD.SendImageJpeg, (p) => { p.writeUInt32BE(img.length >>> 0, 8); });
+    return this._roundtrip(Buffer.concat([header, img]), CMD.SendImageJpeg);
   }
 
   /**
