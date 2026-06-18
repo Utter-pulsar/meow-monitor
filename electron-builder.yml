@@ -34,6 +34,18 @@ asarUnpack:
   - node_modules/@napi-rs/**
   - node_modules/usb/**
 
+# Extend-screen runtime assets (loaded off real disk by the capture window / PowerShell, so they
+# can't live inside app.asar). The app resolves these at process.resourcesPath/vdd when packaged.
+extraResources:
+  - from: scripts/vdd
+    to: vdd
+    filter: ['**/*']
+  # VDD driver + nefconw + install/uninstall scripts (installed by the NSIS hooks during setup).
+  # nefconw.exe is fetched by the GitHub Action before build (not committed); see .github/workflows.
+  - from: vendor/vdd
+    to: driver
+    filter: ['**/*']
+
 win:
   target:
     - target: nsis
@@ -43,11 +55,14 @@ win:
 
 nsis:
   oneClick: false
-  perMachine: false
+  # perMachine (admin install) is required so the installer can install the display driver +
+  # register the SYSTEM scheduled tasks. One UAC at install; on/off afterwards needs no UAC.
+  perMachine: true
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: 摸鱼监控
+  include: build/installer.nsh
   artifactName: meow-monitor-${version}-setup.${ext}
 
 # electron-updater is NOT used (the app checks GitHub Releases itself), but keeping the feed

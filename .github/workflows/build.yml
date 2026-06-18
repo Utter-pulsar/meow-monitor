@@ -32,6 +32,20 @@ jobs:
       - name: Generate icon
         run: npm run icon
 
+      # NefCon (nefconw.exe, MIT) creates/removes the Root\MttVDD device node at install/runtime.
+      # Fetched here (not committed) so the build always has it; devcon is NOT redistributable.
+      - name: Fetch NefCon device tool (x64)
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/nefarius/nefcon/releases/download/v1.17.40/nefcon_v1.17.40.zip'
+          Invoke-WebRequest -Uri $url -OutFile nefcon.zip
+          Expand-Archive nefcon.zip -DestinationPath nefcon -Force
+          $exe = Get-ChildItem nefcon -Recurse -Filter nefconw.exe | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem nefcon -Recurse -Filter nefconw.exe | Select-Object -First 1 }
+          if (-not $exe) { throw 'nefconw.exe not found in NefCon zip' }
+          Copy-Item $exe.FullName 'vendor/vdd/nefconw.exe' -Force
+          Get-ChildItem vendor/vdd
+
       - name: Package (Windows x64)
         run: npx electron-builder --win --publish never
 

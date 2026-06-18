@@ -1,6 +1,6 @@
 // Minimal open driver for the TURZX 8.8" USB bar screen (VID 0x1CBE / PID 0x0092, 464x1920).
 //
-// Reverse-engineered from the official app — see docs/PROTOCOL.md. Talks to the panel over
+// Reverse-engineered from the official app. Talks to the panel over
 // WinUSB via node-usb (usb@2, findByIds — no Zadig/driver swap needed). Interface 0, bulk
 // EP #1: 0x01 OUT (commands + frame data), 0x81 IN (replies). Every command is a 512-byte
 // DES-CBC-encrypted packet; data commands append the raw body after the 512-byte header.

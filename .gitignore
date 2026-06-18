@@ -20,3 +20,8 @@ Thumbs.db
 # local env
 .env
 .env.*
+
+# fetched at build time by the GitHub Action (not committed)
+vendor/vdd/nefconw.exe
+nefcon/
+nefcon.zip

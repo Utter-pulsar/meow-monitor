@@ -90,8 +90,6 @@ FPS=20 npm run monitor   # 调整目标帧率（面板约 14~15 fps 封顶）
 
 面板走的是它的**图片通道**：先进入图片模式（USB 命令 `0x33` mode 1），再把每一帧当 **PNG** 用命令 `0x66` 推上去。画面在面板原生的 **464×1920** 分辨率下绘制（横版内容旋转 90°），小猫在左、指标在右。换动画只要替换 `assets/cat.GIF`，程序会用 ffmpeg 自动重新拆帧。
 
-完整的协议逆向过程见 [docs/PROTOCOL.md](./docs/PROTOCOL.md)。
-
 ```
 assets/cat.GIF        小猫动画（月薪喵）
 fonts/                Excalifont（英文/数字）+ 小赖（中文）
@@ -101,19 +99,20 @@ src/metrics.js        nvidia-smi + systeminformation 采集硬件指标
 src/dashboard.js      把小猫 + 指标曲线渲染成一帧
 src/monitor.js        引擎：循环渲染并推送到副屏（可被界面控制，也能单独跑）
 electron/             小巧的控制面板（界面 + 托盘 + 自启 + 更新检查）
-docs/PROTOCOL.md      面板协议是怎么逆向出来的
 ```
 
 ## 致谢与引用
 
 这个项目是踩在很多开源成果的肩膀上拼出来的，特别感谢：
 
-- 🖥️&nbsp;&nbsp;屏幕驱动与协议逆向，基于开源项目 **TURZX**（本仓库 `src/turzx.js` 与 [docs/PROTOCOL.md](./docs/PROTOCOL.md)）。
+- 🖥️&nbsp;&nbsp;屏幕驱动与协议逆向，基于开源项目 **TURZX**（本仓库 `src/turzx.js`）。
 - 🐱&nbsp;&nbsp;小猫「**月薪喵 / SalaryCat**」来自 [Einswen/SalaryCat](https://github.com/Einswen/SalaryCat)。
-- ✍️&nbsp;&nbsp;手写字体 **Excalifont** 来自 [excalidraw/excalidraw](https://github.com/excalidraw/excalidraw)。
+- ✍️&nbsp;&nbsp;手写字体 **Excalifont**（[excalidraw/excalidraw](https://github.com/excalidraw/excalidraw)）+ 中文 **小赖 / Xiaolai**（[lxgw/kose-font](https://github.com/lxgw/kose-font)）。
+- 🪟&nbsp;&nbsp;扩展屏的虚拟显示器用 **Virtual Display Driver / MttVDD**（[VirtualDrivers/Virtual-Display-Driver](https://github.com/VirtualDrivers/Virtual-Display-Driver)，MIT © 2024 Virtual Display；驱动二进制原样不改地随安装包分发，由 SignPath Foundation 代签）。
+- 🔧&nbsp;&nbsp;创建虚拟显示设备节点用 **NefCon / nefconw**（[nefarius/nefcon](https://github.com/nefarius/nefcon)，MIT © 2022–2025 Nefarius Software Solutions e.U.）。
 
-以上第三方素材与字体的版权、许可均归各自原作者所有，使用时请遵循它们各自的开源协议。
+以上第三方素材、字体与驱动的版权、许可均归各自原作者所有，使用时请遵循它们各自的开源协议；本项目与 VirtualDrivers、SignPath Foundation、Nefarius 等并无隶属关系。
 
 ## 许可证
 
-本项目自身的代码以 [MIT](./LICENSE) 开源；引用到的第三方组件（月薪喵、Excalifont、TURZX 等）遵循其各自的许可证。
+本项目自身的代码以 [MIT](./LICENSE) 开源；引用到的第三方组件（月薪喵、Excalifont、小赖、TURZX、Virtual Display Driver、NefCon 等）遵循其各自的许可证（见上方「致谢与引用」）。

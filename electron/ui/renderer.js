@@ -84,7 +84,7 @@ $('#mode-ext').addEventListener('click', async () => {
 $('#arr-open').addEventListener('click', () => window.moyu.openExternal('ms-settings:display'));
 
 // extend-screen clarity slider — drag to find the sharp-but-not-garbled sweet spot (applies live)
-const KB_MIN = 40, KB_MAX = 480;
+const KB_MIN = 40, KB_MAX = 340;
 let curKb = 150;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const kbToPos = (kb) => clamp01((kb - KB_MIN) / (KB_MAX - KB_MIN));
@@ -120,24 +120,37 @@ $('#btn-update').addEventListener('click', async () => {
   const msg = $('#update-msg');
   msg.className = 'update-msg';
   msg.textContent = '正在检查…';
+  $('#dl-fill').style.width = '0';
+  $('#dl-bar').hidden = true;
   const r = await window.moyu.checkUpdate();
   if (r.status === 'update') {
     msg.classList.add('ok');
-    msg.textContent = `发现新版本 v${r.latest} · `;
-    const a = document.createElement('a');
-    a.href = '#';
-    a.textContent = '前往下载';
-    a.addEventListener('click', (e) => { e.preventDefault(); window.moyu.openExternal(r.url); });
-    msg.appendChild(a);
+    msg.textContent = `发现新版本 v${r.version}，正在下载…`;
+    $('#dl-bar').hidden = false;
   } else if (r.status === 'latest') {
     msg.classList.add('ok');
-    msg.textContent = `已是最新版本（v${r.latest}）`;
-  } else if (r.status === 'none') {
-    msg.textContent = r.message;
+    msg.textContent = `已是最新版本（v${r.version}）`;
+  } else if (r.status === 'dev') {
+    msg.textContent = '开发模式不检查更新（打包后可用）';
   } else {
     msg.classList.add('err');
     msg.textContent = r.message || '检查更新失败';
   }
+});
+
+// auto-update download progress / install (electron-updater)
+window.moyu.onUpdateProgress((pct) => {
+  $('#dl-bar').hidden = false;
+  $('#dl-fill').style.width = pct + '%';
+  const m = $('#update-msg'); m.className = 'update-msg ok'; m.textContent = `下载中… ${pct}%`;
+});
+window.moyu.onUpdateDownloaded(() => {
+  $('#dl-fill').style.width = '100%';
+  const m = $('#update-msg'); m.className = 'update-msg ok'; m.textContent = '下载完成，正在安装并重启…';
+});
+window.moyu.onUpdateError((msg) => {
+  $('#dl-bar').hidden = true;
+  const m = $('#update-msg'); m.className = 'update-msg err'; m.textContent = '更新出错：' + msg;
 });
 
 init();

@@ -6,7 +6,7 @@
 // capture runs in the main process (it needs Chromium's desktopCapturer).
 const fs = require('node:fs');
 const path = require('node:path');
-const https = require('node:https');
+const { autoUpdater } = require('electron-updater');
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProcess, screen } = require('electron');
 const os = require('node:os');
 const { ExtendEngine } = require('../src/extend');
@@ -49,6 +49,16 @@ function setStatus(state, message) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('engine:status', lastStatus);
   updateTrayMenu();
 }
+
+// ---- auto update (electron-updater): download with progress, then install + relaunch -----
+autoUpdater.autoDownload = false;        // we download only after the user clicks 检查更新
+autoUpdater.autoInstallOnAppQuit = true;
+function sendUpd(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+autoUpdater.on('download-progress', (p) => sendUpd('update:progress', Math.max(0, Math.min(100, Math.round(p.percent || 0)))));
+autoUpdater.on('update-downloaded', () => { sendUpd('update:downloaded'); setTimeout(() => { try { autoUpdater.quitAndInstall(); } catch {} }, 1000); });
+autoUpdater.on('error', (e) => sendUpd('update:error', String((e && e.message) || e)));
 
 // ---- dashboard engine (utilityProcess) --------------------------------------------------
 function ensureEngine() {
@@ -130,44 +140,20 @@ async function onStop() {
   else engineStop();
 }
 
-// ---- update check (GitHub Releases, no extra dependency) --------------------------------
-function repoSlug() {
-  try {
-    const pkg = require(path.join(app.getAppPath(), 'package.json'));
-    const url = (pkg.repository && (pkg.repository.url || pkg.repository)) || '';
-    const m = String(url).match(/github\.com[/:]([^/]+\/[^/.]+)/i);
-    if (m) return m[1];
-  } catch {}
-  return 'Utter-pulsar/meow-monitor';
-}
+// ---- update check (electron-updater: check -> download -> install -> relaunch) ----------
 function cmpVer(a, b) { // 1 if a>b, -1 if a<b, 0 if equal (semver major.minor.patch)
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
   for (let i = 0; i < 3; i++) { const x = pa[i] || 0, y = pb[i] || 0; if (x !== y) return x > y ? 1 : -1; }
   return 0;
 }
-function checkUpdate() {
-  return new Promise((resolve) => {
-    const req = https.request({
-      host: 'api.github.com', path: `/repos/${repoSlug()}/releases/latest`, method: 'GET',
-      headers: { 'User-Agent': 'meow-monitor', Accept: 'application/vnd.github+json' },
-    }, (res) => {
-      let body = '';
-      res.on('data', (d) => (body += d));
-      res.on('end', () => {
-        try {
-          if (res.statusCode === 404) return resolve({ status: 'none', message: '仓库还没有发布版本' });
-          if (res.statusCode !== 200) return resolve({ status: 'error', message: `检查失败 (${res.statusCode})` });
-          const j = JSON.parse(body);
-          const latest = String(j.tag_name || '').replace(/^v/i, '');
-          if (latest && cmpVer(latest, app.getVersion()) > 0) resolve({ status: 'update', latest, url: j.html_url });
-          else resolve({ status: 'latest', latest: latest || app.getVersion() });
-        } catch { resolve({ status: 'error', message: '解析失败' }); }
-      });
-    });
-    req.on('error', () => resolve({ status: 'error', message: '网络错误' }));
-    req.setTimeout(8000, () => { req.destroy(); resolve({ status: 'error', message: '请求超时' }); });
-    req.end();
-  });
+async function checkUpdate() {
+  if (!app.isPackaged) return { status: 'dev' }; // electron-updater only works in the installed app
+  try {
+    const r = await autoUpdater.checkForUpdates();
+    const v = r && r.updateInfo && r.updateInfo.version;
+    if (v && cmpVer(v, app.getVersion()) > 0) { autoUpdater.downloadUpdate(); return { status: 'update', version: v }; }
+    return { status: 'latest', version: app.getVersion() };
+  } catch (e) { return { status: 'error', message: String((e && e.message) || e) }; }
 }
 
 // ---- IPC --------------------------------------------------------------------------------
