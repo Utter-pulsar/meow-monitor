@@ -1,8 +1,8 @@
 // src/vdd.js — control the MttVDD virtual display from the Electron main process.
 //
-// on/off trigger two pre-installed SYSTEM scheduled tasks (created once, elevated, by
-// scripts/vdd/setup-vdd.ps1 whose SDDL lets a standard user run them) via the Task Scheduler COM
-// Run, so toggling needs NO elevation:
+// on/off trigger two pre-installed SYSTEM scheduled tasks (created once, elevated, by the NSIS
+// installer's vendor/vdd/install-vdd.ps1 whose SDDL lets a standard user run them) via the Task
+// Scheduler COM Run, so toggling needs NO elevation:
 //   on  = create the Root\MttVDD devnode  -> the 1920x464 virtual screen appears
 //   off = remove the devnode              -> the screen is genuinely gone (the only clean way for
 //                                            an IddCx display; disable/enable leaves a phantom)
@@ -52,6 +52,13 @@ async function waitFor(present, timeoutMs = 9000) {
 
 async function on() {
   if (findDisplay()) return { ok: true, already: true, display: findDisplay() };
+  // No active virtual display. MoyuVddOn runs `devcon install Root\MttVDD`, which ALWAYS creates a
+  // NEW devnode — so a failed attempt (adapter loads but the monitor never arrives, leaving
+  // findDisplay() null) used to make the next click stack yet another adapter. Dozens of stale
+  // monitorless adapters + ghost monitors then wedge the IddCx subsystem so NO new monitor arrives.
+  // Clear any leftover MttVDD devnodes first, so each attempt creates exactly one fresh adapter.
+  await runTask('MoyuVddOff');
+  await sleep(2500); // let devcon remove finish before we install (tasks run async, no display to wait on)
   await runTask('MoyuVddOn');
   const ok = await waitFor(true);
   return { ok, display: findDisplay() };

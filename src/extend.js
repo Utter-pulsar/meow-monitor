@@ -41,7 +41,9 @@ class ExtendEngine {
       this.onStatus('starting', '启动中…');
       const r = await vdd.on();
       const disp = r && r.display;
-      if (!disp) throw new Error('扩展屏创建失败（驱动是否已安装？）');
+      // Adapter created but no 1920x464 monitor arrived: usually the IddCx display subsystem is
+      // wedged (重启电脑可恢复) or another virtual-display driver (向日葵/ToDesk/Parsec 等) is conflicting.
+      if (!disp) throw new Error('扩展屏没出现：虚拟显示器未挂载。请重启电脑后重试，或检查是否与其他虚拟显示软件冲突。');
 
       const srcs = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } });
       const src = srcs.find((s) => s.display_id === String(disp.id));
@@ -80,6 +82,7 @@ class ExtendEngine {
       this.onStatus('running', '运行中');
     } catch (e) {
       this.running = false;
+      extLog('start failed: ' + ((e && e.stack) || e)); // also record it (was UI-only -> undiagnosable)
       await this._teardown({ turnOffScreen: true });
       this.onStatus('error', (e && e.message) ? e.message : String(e));
     }

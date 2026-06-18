@@ -33,20 +33,34 @@ $guid = '4D36E968-E325-11CE-BFC1-08002BE10318'   # Display setup class (no brace
 # 4) off by default: remove any existing devnode so there's no leftover screen
 if (Test-Path $nefcon) { (& $nefcon --remove-device-node --hardware-id "$hwid" --class-guid "$guid") | ForEach-Object { L $_ } }
 
-# 5) register two SYSTEM tasks (runnable by standard users via SDDL) that create / remove the node
+# The IddCx virtual monitor only ATTACHES when the device node is created from the INTERACTIVE
+# desktop session. A SYSTEM task (S-1-5-18 / session 0) creates the adapter but it stays
+# "Device is currently stopped" and no 1920x464 monitor ever arrives (verified on win11). So run
+# the tasks as the logged-on (installing) user with an interactive token + Highest privileges =>
+# session 1, elevated, NO runtime UAC. Requires that user be a local admin (perMachine install
+# already required admin). Non-admin users would get a non-elevated task that can't create the node.
+$ConsoleUser = (Get-CimInstance Win32_ComputerSystem).UserName
+if (-not $ConsoleUser) { $ConsoleUser = "$env:USERDOMAIN\$env:USERNAME" }
+L "tasks will run as interactive user: $ConsoleUser"
+
+# 5) register two tasks (interactive token, Highest) that create / remove the node
 function RegTask($name, $argline) {
   $svc = New-Object -ComObject Schedule.Service; $svc.Connect()
   $root = $svc.GetFolder('\'); $td = $svc.NewTask(0)
   $td.RegistrationInfo.Description = "moyu-monitor virtual display: $name"
-  $td.Principal.UserId = 'S-1-5-18'; $td.Principal.LogonType = 5; $td.Principal.RunLevel = 1
+  # session 1 + elevated + no UAC: IddCx monitor only attaches from the interactive session, not SYSTEM/session 0
+  $td.Principal.UserId = $ConsoleUser; $td.Principal.LogonType = 3; $td.Principal.RunLevel = 1  # InteractiveToken + Highest
   $td.Settings.AllowDemandStart = $true; $td.Settings.DisallowStartIfOnBatteries = $false
   $td.Settings.StopIfGoingOnBatteries = $false; $td.Settings.MultipleInstances = 2
   $td.Settings.ExecutionTimeLimit = 'PT2M'; $td.Settings.Hidden = $true
   $act = $td.Actions.Create(0); $act.Path = $nefcon; $act.Arguments = $argline
   $sddl = 'D:(A;;FA;;;SY)(A;;FA;;;BA)(A;;GRGX;;;BU)'  # SYSTEM/Admins full; Built-in Users read+execute
-  $root.RegisterTaskDefinition($name, $td, 6, 'S-1-5-18', $null, 5, $sddl) | Out-Null
+  $root.RegisterTaskDefinition($name, $td, 6, $ConsoleUser, $null, 3, $sddl) | Out-Null  # logonType 3 = interactive token
 }
-RegTask 'MoyuVddOn'  ("--create-device-node --hardware-id `"$hwid`" --class-name Display --class-guid `"$guid`"")
+# ON uses nefconw's `install <inf> <hwid>` (full DIF_INSTALLDEVICE = create node + install + START the
+# driver) — NOT `--create-device-node`, which only creates a bare node that stays "stopped" so the
+# IddCx monitor never attaches. This is the verb the upstream Virtual-Display-Driver project uses.
+RegTask 'MoyuVddOn'  ('install "' + $inf + '" "' + $hwid + '"')
 RegTask 'MoyuVddOff' ("--remove-device-node --hardware-id `"$hwid`" --class-guid `"$guid`"")
 L "registered MoyuVddOn / MoyuVddOff"
 L '=== done ==='
