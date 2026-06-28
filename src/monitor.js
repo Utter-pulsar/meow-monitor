@@ -43,10 +43,12 @@ async function loadCatFrames() {
  * the render loop runs in the background and reports progress through onStatus(state, message),
  * where state is one of: 'starting' | 'running' | 'error' | 'stopped'.
  */
-async function runMonitor({ fps = 12, onStatus = () => {} } = {}) {
+async function runMonitor({ fps = 12, order, onStatus = () => {} } = {}) {
   let stopping = false;
   let dev = null;
   let metrics = null;
+  let dash = null;          // created during startup below
+  let pendingOrder = order; // remembered until dash exists (covers a reorder mid-startup)
   const status = (state, message) => { try { onStatus(state, message); } catch {} };
 
   // The detached loop below is the SOLE owner of teardown (in its finally), so the device is
@@ -56,6 +58,8 @@ async function runMonitor({ fps = 12, onStatus = () => {} } = {}) {
 
   const handle = {
     stopped: false,
+    // live panel reorder pushed from the control panel; applies to the next rendered frame
+    setOrder(o) { pendingOrder = o; if (dash) dash.setOrder(o); },
     async stop() { stopping = true; await done; },
   };
 
@@ -65,7 +69,7 @@ async function runMonitor({ fps = 12, onStatus = () => {} } = {}) {
       const cats = await loadCatFrames();
       if (stopping) return;
       metrics = new Metrics().start(1000);
-      const dash = new Dashboard();
+      dash = new Dashboard(pendingOrder);
       if (stopping) return;
       status('starting', '正在连接屏幕…');
       dev = new TurzxDevice();

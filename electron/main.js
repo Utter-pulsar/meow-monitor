@@ -11,6 +11,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProc
 const os = require('node:os');
 const { ExtendEngine } = require('../src/extend');
 const vdd = require('../src/vdd');
+const { PANELS_META, DEFAULT_ORDER, normalizeOrder } = require('../src/panels');
 
 // Log main-process crashes to a file (Electron's GUI stdout doesn't reach the terminal on Windows).
 const MAIN_ERR_LOG = path.join(os.tmpdir(), 'moyu-main-error.log');
@@ -22,7 +23,7 @@ const ICON_PATH = path.join(__dirname, 'ui', 'icon.png');
 const ENGINE_ENTRY = path.join(__dirname, '..', 'src', 'engine-entry.js');
 
 // ---- settings (a small JSON file in userData) ------------------------------------------
-const DEFAULTS = { minimizeToTray: true, launchAtLogin: false, fps: 12, mode: 'dashboard', extendQuality: 150 };
+const DEFAULTS = { minimizeToTray: true, launchAtLogin: false, fps: 12, mode: 'dashboard', extendQuality: 150, dashOrder: DEFAULT_ORDER };
 let settings = { ...DEFAULTS };
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 function loadSettings() {
@@ -71,7 +72,7 @@ function ensureEngine() {
   engine.on('exit', () => { engine = null; });
   return engine;
 }
-function engineStart() { ensureEngine().postMessage({ type: 'start', fps: settings.fps }); }
+function engineStart() { ensureEngine().postMessage({ type: 'start', fps: settings.fps, order: normalizeOrder(settings.dashOrder) }); }
 function engineStop() { if (engine) engine.postMessage({ type: 'stop' }); }
 
 // ---- extend-screen engine (main process) ------------------------------------------------
@@ -83,7 +84,10 @@ const extendRunning = () => !!(extend && (extend.running || extend.dev));
 // ---- window -----------------------------------------------------------------------------
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 380, height: settings.mode === 'extend' ? 720 : 640,
+    // generous starting height; the renderer measures its content and calls window:fit to shrink
+    // the window to the exact height (no scrollbar). Starting tall avoids a scrollbar flash before
+    // that fit lands. If the renderer never fits (old build), it just leaves a little blank space.
+    width: 380, height: settings.mode === 'extend' ? 760 : 820,
     resizable: false, maximizable: false, fullscreenable: false,
     frame: false, show: false, backgroundColor: '#FBF7EF', title: '摸鱼监控',
     icon: iconImage(),
@@ -107,7 +111,8 @@ function showWindow() {
 }
 function resizeForMode(mode) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  try { mainWindow.setContentSize(380, mode === 'extend' ? 720 : 640); } catch {}
+  // coarse generous size for the new mode; the renderer refits to the exact height right after
+  try { mainWindow.setContentSize(380, mode === 'extend' ? 760 : 820); } catch {}
 }
 
 // ---- tray -------------------------------------------------------------------------------
@@ -191,6 +196,17 @@ ipcMain.handle('vdd:displays', () => {
   };
 });
 ipcMain.handle('vdd:setPosition', async (_e, x, y) => { await vdd.setPosition(x, y); return true; });
+// dashboard panel arrangement: the control panel shows a drag-to-reorder grid; the new order is
+// persisted and pushed to the running engine live (next frame reflects it, no restart).
+ipcMain.handle('dash:getPanels', () => PANELS_META);
+ipcMain.handle('dash:getOrder', () => normalizeOrder(settings.dashOrder));
+ipcMain.handle('dash:setOrder', (_e, order) => {
+  const next = normalizeOrder(order);
+  settings.dashOrder = next; saveSettings();
+  if (engine) { try { engine.postMessage({ type: 'order', order: next }); } catch {} }
+  return next;
+});
+
 ipcMain.handle('extend:getQuality', () => settings.extendQuality);
 ipcMain.handle('extend:setQuality', (_e, kb) => {
   const v = Math.max(8, Math.min(512, Number(kb) || 56));
@@ -205,6 +221,18 @@ ipcMain.handle('app:openExternal', (_e, url) => shell.openExternal(url));
 // "minimize to tray" setting is on, otherwise it quits.
 ipcMain.on('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('window:close', () => { if (settings.minimizeToTray) mainWindow.hide(); else app.quit(); });
+// renderer-driven exact-fit: size the window to its measured content height so there's no
+// scrollbar, clamped to the display work area (on a short screen it stays scrollable instead).
+ipcMain.handle('window:fit', (_e, h) => {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const want = Math.round(Number(h) || 0);
+  if (!want) return false;
+  let maxH = 4000;
+  try { maxH = screen.getDisplayMatching(mainWindow.getBounds()).workArea.height; } catch {}
+  const clamped = Math.max(360, Math.min(want, maxH));
+  try { mainWindow.setContentSize(380, clamped); } catch {}
+  return true;
+});
 
 // ---- lifecycle --------------------------------------------------------------------------
 if (!app.requestSingleInstanceLock()) {

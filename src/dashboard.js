@@ -4,6 +4,7 @@
 const path = require('path');
 const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
 const unpacked = require('./asar');
+const { PANELS_META, DEFAULT_ORDER, normalizeOrder } = require('./panels');
 
 const FONTS = unpacked(path.join(__dirname, '..', 'fonts')); // native font loader reads off disk
 GlobalFonts.registerFromPath(path.join(FONTS, 'Excalifont-Regular.woff2'), 'Excali'); // English/numbers
@@ -19,15 +20,20 @@ const COLS = 3, ROWS = 2, PAD = 12;
 const PW = (GW - PAD * (COLS - 1)) / COLS;
 const PH = (GH - PAD * (ROWS - 1)) / ROWS;
 
-// metric -> {label(zh), color, history key, max, big value text, small sub text}
-const PANELS = [
-  { label: '显卡功率', color: '#9dff5a', key: 'gpuPower', max: (c) => c.gpuPowerMax || 180, val: (c) => `${c.gpuPower.toFixed(0)}W`, sub: (c) => `峰值 ${(c.gpuPowerMax || 180).toFixed(0)}W` },
-  { label: '显存占用', color: '#5fd0ff', key: 'vramUsed', max: (c) => c.vramTotal || 8, val: (c) => `${c.vramUsed.toFixed(1)}G`, sub: (c) => `共 ${(c.vramTotal || 0).toFixed(0)}G` },
-  { label: '显卡温度', color: '#ff7b54', key: 'gpuTemp', max: () => 100, val: (c) => `${c.gpuTemp.toFixed(0)}°`, sub: (c) => `${c.gpuClock.toFixed(0)}MHz` },
-  { label: '显卡占用', color: '#c08bff', key: 'gpuUtil', max: () => 100, val: (c) => `${c.gpuUtil.toFixed(0)}%`, sub: (c) => `风扇 ${c.gpuFan.toFixed(0)}%` },
-  { label: '内存占用', color: '#ffd166', key: 'ramPct', max: () => 100, val: (c) => `${c.ramPct.toFixed(0)}%`, sub: (c) => `${c.ramUsed.toFixed(1)}/${(c.ramTotal || 0).toFixed(0)}G` },
-  { label: 'CPU占用', color: '#56e0c8', key: 'cpuLoad', max: () => 100, val: (c) => `${c.cpuLoad.toFixed(0)}%`, sub: (c) => `${c.cpuSpeed.toFixed(1)}GHz` },
-];
+// Per-metric render functions (big value text, small sub text, chart max), keyed by metric key.
+// Label + accent color + the default display order live in ./panels (shared with the control
+// panel UI so the drag-to-arrange grid stays in sync).
+const RENDER = {
+  gpuPower: { max: (c) => c.gpuPowerMax || 180, val: (c) => `${c.gpuPower.toFixed(0)}W`, sub: (c) => `峰值 ${(c.gpuPowerMax || 180).toFixed(0)}W` },
+  vramUsed: { max: (c) => c.vramTotal || 8,     val: (c) => `${c.vramUsed.toFixed(1)}G`,  sub: (c) => `共 ${(c.vramTotal || 0).toFixed(0)}G` },
+  gpuTemp:  { max: () => 100, val: (c) => `${c.gpuTemp.toFixed(0)}°`,  sub: (c) => `${c.gpuClock.toFixed(0)}MHz` },
+  gpuUtil:  { max: () => 100, val: (c) => `${c.gpuUtil.toFixed(0)}%`,  sub: (c) => `风扇 ${c.gpuFan.toFixed(0)}%` },
+  ramPct:   { max: () => 100, val: (c) => `${c.ramPct.toFixed(0)}%`,   sub: (c) => `${c.ramUsed.toFixed(1)}/${(c.ramTotal || 0).toFixed(0)}G` },
+  cpuLoad:  { max: () => 100, val: (c) => `${c.cpuLoad.toFixed(0)}%`,   sub: (c) => `${c.cpuSpeed.toFixed(1)}GHz` },
+};
+// metric key -> full panel def {key, label(zh), color, max, val, sub}
+const PANELS = {};
+for (const m of PANELS_META) PANELS[m.key] = { ...m, ...RENDER[m.key] };
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -83,10 +89,16 @@ function drawPanel(ctx, x, y, w, h, p, cur, hist) {
 }
 
 class Dashboard {
-  constructor() {
+  constructor(order) {
     this.land = createCanvas(W, H); this.lc = this.land.getContext('2d');
     this.dev = createCanvas(DEV_W, DEV_H); this.dc = this.dev.getContext('2d');
+    // panel display order (array of metric keys), reorderable live from the control panel
+    this.order = normalizeOrder(order || DEFAULT_ORDER);
   }
+
+  // Live reorder: the control panel's drag-to-arrange grid pushes a new order while running;
+  // the next render() picks it up. Normalized so a partial/garbled order can't break the grid.
+  setOrder(order) { this.order = normalizeOrder(order); }
 
   render(metrics, catImg) {
     const ctx = this.lc, cur = metrics.cur, hist = metrics.hist;
@@ -102,11 +114,13 @@ class Dashboard {
     }
     ctx.fillStyle = '#cfe0ff'; ctx.font = '30px Xiaolai'; ctx.textAlign = 'center';
     ctx.fillText('摸鱼监控', CAT_W / 2, H - 22); ctx.textAlign = 'left';
-    // panels
-    for (let i = 0; i < PANELS.length; i++) {
+    // panels — laid out row-major in the user-chosen order (3 cols x 2 rows)
+    for (let i = 0; i < this.order.length; i++) {
+      const p = PANELS[this.order[i]];
+      if (!p) continue;
       const col = i % COLS, row = (i / COLS) | 0;
       const px = GX + col * (PW + PAD), py = GY + row * (PH + PAD);
-      drawPanel(ctx, px, py, PW, PH, PANELS[i], cur, hist);
+      drawPanel(ctx, px, py, PW, PH, p, cur, hist);
     }
     // rotate landscape -> device portrait
     const d = this.dc;

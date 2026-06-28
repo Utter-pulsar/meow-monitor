@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld('moyu', {
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
 
+  // dashboard panel arrangement (drag-to-reorder grid)
+  dashGetPanels: () => ipcRenderer.invoke('dash:getPanels'),
+  dashGetOrder: () => ipcRenderer.invoke('dash:getOrder'),
+  dashSetOrder: (order) => ipcRenderer.invoke('dash:setOrder', order),
+
   // mode + extend-screen
   getMode: () => ipcRenderer.invoke('mode:get'),
   setMode: (m) => ipcRenderer.invoke('mode:set', m),
@@ -44,6 +49,7 @@ contextBridge.exposeInMainWorld('moyu', {
 
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
+  fitWindow: (h) => ipcRenderer.invoke('window:fit', h),
   onStatus: (cb) => ipcRenderer.on('engine:status', (_e, s) => cb(s)),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, p) => cb(p)),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update:downloaded', () => cb()),
