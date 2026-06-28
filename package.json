@@ -1,7 +1,7 @@
 {
   "name": "meow-monitor",
   "productName": "摸鱼监控",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "摸鱼监控 — 把「月薪喵」小猫和电脑硬件状态一起投到 TURZX 8.8 寸副屏上的桌面小程序。",
   "author": "Utter-pulsar",
   "license": "MIT",
