@@ -30,12 +30,14 @@ class ExtendEngine {
   constructor() {
     this.dev = null; this.win = null; this.running = false; this.busy = false;
     this.frames = 0; this.onStatus = () => {}; this._onFrame = null;
+    this.blanked = false;
   }
 
-  async start({ fps = 12, target, onStatus = () => {} } = {}) {
+  async start({ fps = 12, target, blanked = false, onStatus = () => {} } = {}) {
     if (this.running) return;
     this.running = true; this.onStatus = onStatus; this.frames = 0;
     this.targetKB = Number(target) || Number(process.env.MOYU_TARGET_KB) || 56;
+    this.blanked = !!blanked;
     const efps = Math.min(fps || 12, 10); // desktop frames are large; cap fps for stability
     try {
       this.onStatus('starting', '启动中…');
@@ -52,7 +54,13 @@ class ExtendEngine {
       this.onStatus('starting', '连接面板…');
       this.dev = new TurzxDevice();
       await this.dev.open();
-      await this.dev.startImage({ fps: efps, firstImage: null });
+      // Treat startup as an in-flight USB operation too, so a lock/unlock arriving here cannot
+      // interleave a brightness command with the panel handshake.
+      this.busy = true;
+      try {
+        await this.dev.startImage({ fps: efps, firstImage: null });
+        if (this.blanked) await this.dev.setBrightness(0);
+      } finally { this.busy = false; }
 
       this._onFrame = async (_e, u8, lvl) => {
         if (!this.running || this.busy || !this.dev) return;
@@ -101,6 +109,16 @@ class ExtendEngine {
     if (this.win && !this.win.isDestroyed()) {
       try { this.win.webContents.send('extend:target', this.targetKB); } catch {}
     }
+  }
+
+  // Brightness zero blanks the physical panel without removing the Windows virtual display.
+  async setBlank(value) {
+    this.blanked = !!value;
+    while (this.busy && this.running) await new Promise((r) => setTimeout(r, 10));
+    if (!this.running || !this.dev) return;
+    this.busy = true;
+    try { await this.dev.setBrightness(this.blanked ? 0 : 0x5d); }
+    finally { this.busy = false; }
   }
 
   async _teardown({ turnOffScreen }) {

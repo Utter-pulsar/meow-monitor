@@ -15,9 +15,11 @@ process.parentPort.on('message', async (e) => {
   const msg = (e && e.data) || {};
   if (msg.type === 'start') {
     if (handle && !handle.stopped) return; // already running
-    handle = await runMonitor({ fps: msg.fps || 12, order: msg.order, onStatus: send });
+    handle = await runMonitor({ fps: msg.fps || 12, order: msg.order, blanked: !!msg.blanked, onStatus: send });
   } else if (msg.type === 'order') {
     if (handle && !handle.stopped) handle.setOrder(msg.order); // live reorder
+  } else if (msg.type === 'blank') {
+    if (handle && !handle.stopped) handle.setBlank(!!msg.value);
   } else if (msg.type === 'stop') {
     if (handle) { await handle.stop(); handle = null; }
     else send('stopped', '已停止');

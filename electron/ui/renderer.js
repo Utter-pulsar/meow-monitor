@@ -31,6 +31,13 @@ const LABELS = { running: '运行中', starting: '正在启动…', stopped: '�
 
 function paintSwitch(input) { input.closest('.switch').classList.toggle('on', input.checked); }
 
+function renderBlackout(s) {
+  const sw = $('#sw-blackout');
+  sw.checked = !!s.manual;
+  sw.disabled = !!s.locked;
+  paintSwitch(sw);
+}
+
 function renderStatus(s) {
   const meta = LABELS[s.state] ? s.state : 'stopped';
   $('#status').className = 'status-card ' + meta;
@@ -236,12 +243,14 @@ async function init() {
   await buildArranger();
   applyModeUI(cfg.mode || 'dashboard');
   renderStatus(await window.moyu.getStatus());
+  renderBlackout(await window.moyu.getBlackout());
   // size to fit once the (large, async) Xiaolai font has settled so the measurement is final
   try { await document.fonts.ready; } catch {}
   fitWindow();
 }
 
 window.moyu.onStatus(renderStatus);
+window.moyu.onBlackout(renderBlackout);
 
 // the run on/off switch IS the start/stop control
 $('#sw-run').addEventListener('change', (e) => {
@@ -290,6 +299,7 @@ async function loadQuality() { try { curKb = await window.moyu.extendGetQuality(
 // settings switches + window controls
 $('#sw-autolaunch').addEventListener('change', (e) => { paintSwitch(e.target); window.moyu.setAutoLaunch(e.target.checked); });
 $('#sw-minimize').addEventListener('change', (e) => { paintSwitch(e.target); window.moyu.setMinimize(e.target.checked); });
+$('#sw-blackout').addEventListener('change', async (e) => renderBlackout(await window.moyu.setBlackout(e.target.checked)));
 $('#btn-min').addEventListener('click', () => window.moyu.minimizeWindow());
 $('#btn-close').addEventListener('click', () => window.moyu.closeWindow());
 

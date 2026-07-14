@@ -43,12 +43,14 @@ async function loadCatFrames() {
  * the render loop runs in the background and reports progress through onStatus(state, message),
  * where state is one of: 'starting' | 'running' | 'error' | 'stopped'.
  */
-async function runMonitor({ fps = 12, order, onStatus = () => {} } = {}) {
+async function runMonitor({ fps = 12, order, blanked = false, onStatus = () => {} } = {}) {
   let stopping = false;
   let dev = null;
   let metrics = null;
   let dash = null;          // created during startup below
   let pendingOrder = order; // remembered until dash exists (covers a reorder mid-startup)
+  let wantBlank = !!blanked;
+  let appliedBlank = false;
   const status = (state, message) => { try { onStatus(state, message); } catch {} };
 
   // The detached loop below is the SOLE owner of teardown (in its finally), so the device is
@@ -60,6 +62,7 @@ async function runMonitor({ fps = 12, order, onStatus = () => {} } = {}) {
     stopped: false,
     // live panel reorder pushed from the control panel; applies to the next rendered frame
     setOrder(o) { pendingOrder = o; if (dash) dash.setOrder(o); },
+    setBlank(v) { wantBlank = !!v; },
     async stop() { stopping = true; await done; },
   };
 
@@ -76,11 +79,16 @@ async function runMonitor({ fps = 12, order, onStatus = () => {} } = {}) {
       await dev.open();
       if (stopping) return;
       await dev.startImage({ fps, firstImage: dash.render(metrics, cats[0]) });
+      if (wantBlank) { await dev.setBrightness(0); appliedBlank = true; }
       status('running', `运行中 · ${cats.length} 帧 @ ${fps}fps`);
       const interval = 1000 / fps;
       let i = 0;
       while (!stopping) {
         const tick = Date.now();
+        if (wantBlank !== appliedBlank) {
+          await dev.setBrightness(wantBlank ? 0 : 0x5d);
+          appliedBlank = wantBlank;
+        }
         await dev.sendImage(dash.render(metrics, cats[i % cats.length]));
         i++;
         for (let p = 0; p < 2 && !stopping; p++) await dev.poll7a(); // light flow-control

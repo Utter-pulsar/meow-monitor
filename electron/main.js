@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { autoUpdater } = require('electron-updater');
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProcess, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProcess, screen, powerMonitor } = require('electron');
 const os = require('node:os');
 const { ExtendEngine } = require('../src/extend');
 const vdd = require('../src/vdd');
@@ -38,6 +38,46 @@ let engine = null;          // dashboard utilityProcess
 let extend = null;          // ExtendEngine (extend-screen mode)
 let lastStatus = { state: 'stopped', message: '未运行' };
 let quitting = false;
+let manualBlackout = false;
+let sessionLocked = false;
+let unlockRecoveryTimer = null;
+let unlockRecovery = null;
+
+const isBlackedOut = () => manualBlackout || sessionLocked;
+function sendBlackout() {
+  const state = { active: isBlackedOut(), manual: manualBlackout, locked: sessionLocked };
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('display:blackout', state);
+  return state;
+}
+async function applyBlackout() {
+  const value = isBlackedOut();
+  if (engine) { try { engine.postMessage({ type: 'blank', value }); } catch {} }
+  if (extend) { try { await extend.setBlank(value); } catch (e) { logMainErr('setBlank', e); } }
+  return sendBlackout();
+}
+
+// Windows invalidates DXGI Desktop Duplication while the session is locked. Restoring brightness
+// alone then reveals the last captured black frame, so rebuild the extend capture/USB session after
+// unlock. Keep the VDD devnode alive throughout: Windows display topology never changes.
+function recoverAfterUnlock() {
+  clearTimeout(unlockRecoveryTimer);
+  unlockRecoveryTimer = setTimeout(() => {
+    unlockRecoveryTimer = null;
+    if (sessionLocked || quitting || settings.mode !== 'extend' || !extendRunning()) {
+      applyBlackout();
+      return;
+    }
+    if (unlockRecovery) return;
+    unlockRecovery = (async () => {
+      try {
+        await extend.stop({ turnOffScreen: false });
+        if (!sessionLocked && !quitting && settings.mode === 'extend') await extendStart();
+        await applyBlackout();
+      } catch (e) { logMainErr('recoverAfterUnlock', e); }
+      finally { unlockRecovery = null; }
+    })();
+  }, 700);
+}
 
 const isRunning = () => lastStatus.state === 'running' || lastStatus.state === 'starting';
 function iconImage() {
@@ -72,12 +112,12 @@ function ensureEngine() {
   engine.on('exit', () => { engine = null; });
   return engine;
 }
-function engineStart() { ensureEngine().postMessage({ type: 'start', fps: settings.fps, order: normalizeOrder(settings.dashOrder) }); }
+function engineStart() { ensureEngine().postMessage({ type: 'start', fps: settings.fps, order: normalizeOrder(settings.dashOrder), blanked: isBlackedOut() }); }
 function engineStop() { if (engine) engine.postMessage({ type: 'stop' }); }
 
 // ---- extend-screen engine (main process) ------------------------------------------------
 function getExtend() { if (!extend) extend = new ExtendEngine(); return extend; }
-async function extendStart() { engineStop(); await getExtend().start({ fps: settings.fps, target: settings.extendQuality, onStatus: setStatus }); }
+async function extendStart() { engineStop(); await getExtend().start({ fps: settings.fps, target: settings.extendQuality, blanked: isBlackedOut(), onStatus: setStatus }); }
 async function extendStop() { if (extend) await extend.stop({ turnOffScreen: true }); }
 const extendRunning = () => !!(extend && (extend.running || extend.dev));
 
@@ -165,6 +205,8 @@ async function checkUpdate() {
 ipcMain.handle('engine:start', async () => { await onStart(); return true; });
 ipcMain.handle('engine:stop', async () => { await onStop(); return true; });
 ipcMain.handle('engine:status', () => lastStatus);
+ipcMain.handle('display:getBlackout', () => sendBlackout());
+ipcMain.handle('display:setBlackout', async (_e, value) => { manualBlackout = !!value; return applyBlackout(); });
 ipcMain.handle('settings:get', () => ({ ...settings, version: app.getVersion() }));
 ipcMain.handle('settings:setMinimize', (_e, v) => { settings.minimizeToTray = !!v; saveSettings(); return settings.minimizeToTray; });
 ipcMain.handle('settings:setAutoLaunch', (_e, v) => {
@@ -245,6 +287,15 @@ if (!app.requestSingleInstanceLock()) {
     if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
     createWindow();
     createTray();
+    powerMonitor.on('lock-screen', () => {
+      sessionLocked = true;
+      clearTimeout(unlockRecoveryTimer);
+      unlockRecoveryTimer = null;
+      applyBlackout();
+    });
+    powerMonitor.on('unlock-screen', () => { sessionLocked = false; recoverAfterUnlock(); });
+    // Some sleep/wake paths deliver resume without a separate unlock notification.
+    powerMonitor.on('resume', () => { if (!sessionLocked) recoverAfterUnlock(); });
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
   });
   app.on('window-all-closed', () => { if (!settings.minimizeToTray) app.quit(); });
