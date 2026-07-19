@@ -13,6 +13,10 @@
   --yellow: #ffd23f;
   --grain: rgba(43, 43, 43, 0.05);
   --track: #e7e0d2;
+  --cyber-bg: #121935;
+  --cyber-line: rgba(124, 231, 255, 0.2);
+  --cyber-ink: #e4f0ff;
+  --cyber-glow: #7ce7ff;
 }
 
 * { box-sizing: border-box; }
@@ -108,6 +112,7 @@ body {
   border-bottom: 2px dashed rgba(43, 43, 43, 0.16);
 }
 .row:last-child { border-bottom: none; }
+.row-tight { padding: 10px 0 12px; }
 .row-label { display: flex; flex-direction: column; font-size: 15.5px; font-weight: 700; }
 .row-label small { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 3px; }
 
@@ -148,7 +153,7 @@ body {
 .update-msg a { color: var(--blue); cursor: pointer; }
 
 /* ---- mode segmented control ---- */
-.mode {
+.mode, .cyber-mode {
   display: flex; border: 2.5px solid var(--ink); border-radius: 16px;
   overflow: hidden; box-shadow: 3px 3px 0 0 var(--shadow);
 }
@@ -178,14 +183,14 @@ body {
 .btn-open:active { transform: translate(3px, 3px); box-shadow: 0 0 0 0 var(--shadow); }
 
 /* ---- dashboard panel arranger (drag the whole card to reorder, no handle) ---- */
-.arr-box {
+.arr-box, .cyber-box {
   display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 13px;
   background: var(--card); border: 2.5px solid var(--ink); border-radius: 18px;
   box-shadow: 3px 3px 0 0 var(--shadow);
 }
-.arr-box[hidden] { display: none; }
-.arr-head { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 700; }
-.arr-head small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.arr-box[hidden], .cyber-box[hidden] { display: none; }
+.arr-head, .cyber-head { display: flex; align-items: baseline; gap: 8px; font-size: 14px; font-weight: 700; }
+.arr-head small, .cyber-head small { font-size: 12px; font-weight: 400; color: var(--muted); }
 .arr-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .arr-tile {
   display: flex; align-items: center; justify-content: center;
@@ -200,6 +205,123 @@ body {
 .arr-tile:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 0 var(--shadow); }
 .arr-tile:active { cursor: grabbing; }
 .arr-tile.dragging { opacity: 0.4; box-shadow: 0 0 0 0 var(--shadow); transform: none; }
+
+/* ---- 赛博消息栏 control panel ---- */
+.cyber-box {
+  gap: 0;
+  overflow: hidden;
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.cyber-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; border: none; background: transparent; cursor: pointer;
+  padding: 2px 0 0; color: var(--ink); font: inherit; text-align: left;
+}
+.cyber-toggle-title { font-size: 18px; font-weight: 700; }
+.cyber-pin {
+  font-size: 12px; color: var(--muted); padding: 4px 10px;
+  border-radius: 999px; background: rgba(43, 43, 43, 0.06);
+  transition: background 0.18s ease, color 0.18s ease, transform 0.24s cubic-bezier(.22,1.35,.34,1);
+}
+.cyber-box.pinned .cyber-pin { color: #214d8f; background: rgba(91, 141, 239, 0.12); transform: translateY(-1px) scale(1.03); }
+.cyber-box.open,
+.cyber-box.pinned { gap: 10px; }
+.cyber-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  transform: translateY(-9px) scaleY(0.94);
+  transform-origin: top center;
+  pointer-events: none;
+  transition:
+    max-height 320ms cubic-bezier(.22,1,.28,1),
+    opacity 180ms ease,
+    padding-top 220ms ease,
+    transform 340ms cubic-bezier(.22,1.35,.34,1);
+}
+.cyber-box.open .cyber-body,
+.cyber-box.pinned .cyber-body {
+  max-height: 760px;
+  opacity: 1;
+  padding-top: 10px;
+  transform: translateY(0) scaleY(1);
+  pointer-events: auto;
+}
+.cyber-box.open { transform: translateY(-1px); }
+.cyber-box.pinned { transform: translateY(-1px) scale(1.002); }
+.cyber-head { justify-content: space-between; align-items: flex-start; }
+.btn-mini {
+  font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  color: var(--ink); background: var(--paper);
+  border: 2px solid var(--ink); border-radius: 11px;
+  padding: 6px 10px; box-shadow: 2px 2px 0 0 var(--shadow);
+}
+.btn-mini:hover { transform: translate(-1px, -1px); }
+.btn-mini:active { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--shadow); }
+.cyber-preview {
+  padding: 12px;
+  border-radius: 15px;
+  background: radial-gradient(circle at top right, rgba(124, 231, 255, 0.12), transparent 34%), var(--cyber-bg);
+  border: 2.5px solid #1f294f;
+  color: var(--cyber-ink);
+  box-shadow: inset 0 0 0 1px var(--cyber-line);
+}
+.cyber-preview-head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 9px; }
+.cyber-preview-head small { color: rgba(228, 240, 255, 0.72); }
+.cyber-empty { font-size: 12px; color: rgba(228, 240, 255, 0.7); }
+.cyber-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+  outline: none;
+}
+.cyber-list::-webkit-scrollbar { width: 6px; }
+.cyber-list::-webkit-scrollbar-track { background: rgba(124, 231, 255, 0.05); border-radius: 999px; }
+.cyber-list::-webkit-scrollbar-thumb { background: rgba(124, 231, 255, 0.34); border-radius: 999px; }
+.cyber-list::-webkit-scrollbar-thumb:hover { background: rgba(124, 231, 255, 0.62); }
+.cyber-list:focus-visible { box-shadow: 0 0 0 2px rgba(124, 231, 255, 0.28); border-radius: 10px; }
+.cyber-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 8px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: rgba(6, 12, 28, 0.46);
+  border: 1px solid rgba(124, 231, 255, 0.14);
+}
+.cyber-item-head {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #f6fbff;
+}
+.cyber-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(124, 231, 255, 0.12);
+  border: 1px solid rgba(124, 231, 255, 0.3);
+  font-size: 11px;
+  letter-spacing: 0.3px;
+}
+.cyber-item-time { color: rgba(228, 240, 255, 0.5); font-size: 11px; }
+.cyber-item-msg {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: rgba(228, 240, 255, 0.95);
+  word-break: break-word;
+}
+.cyber-preview.empty .cyber-list { display: none; }
+.cyber-preview.empty .cyber-empty { display: block; }
+.cyber-preview:not(.empty) .cyber-empty { display: none; }
 
 /* ---- clarity slider (hand-drawn, draggable) ---- */
 .qual-box {
@@ -230,20 +352,40 @@ body {
 /* let the content scroll if a mode's panel is taller than the window */
 body { display: flex; flex-direction: column; }
 .titlebar { flex: none; }
-.content { flex: 1 1 auto; overflow-y: auto; }
-.content > * { flex: none; } /* keep each section at its natural height; let .content scroll instead of squishing rows */
-
-/* ---- hand-drawn scrollbar: only shows when the screen is too short to fit (the window auto-fits
-   otherwise). Hair-thin at rest; thickens to a grabbable ink pill when you point at it. ---- */
-.content::-webkit-scrollbar { width: 12px; }
-.content::-webkit-scrollbar-track { background: transparent; }
-.content::-webkit-scrollbar-thumb {
-  background-color: var(--ink);
-  background-clip: padding-box;          /* paint inside the padding so the border reads as a gap */
-  border: 4px solid transparent;          /* hair-thin pill (12 − 2·4 = 4px) at rest */
-  border-radius: 999px;
-  min-height: 40px;
+.content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
 }
-.content::-webkit-scrollbar-thumb:hover {
-  border-width: 1px;                      /* thick pill (12 − 2·1 = 10px) on hover → grab to drag */
+.content > * { flex: none; } /* keep each section at its natural height; let .content scroll instead of squishing rows */
+.content::-webkit-scrollbar { width: 0; display: none; }
+
+.doodle-scrollthumb {
+  position: absolute;
+  right: 3px;
+  top: 0;
+  width: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.doodle-scrollthumb.visible { opacity: 1; pointer-events: auto; }
+.doodle-scrollthumb-bar {
+  width: 3px;
+  height: 100%;
+  border-radius: 999px;
+  background: rgba(43, 43, 43, 0.38);
+  box-shadow: 0 0 0 1px rgba(43, 43, 43, 0.06);
+  transition: width 130ms ease, background-color 130ms ease;
+}
+.doodle-scrollthumb:hover .doodle-scrollthumb-bar,
+.doodle-scrollthumb.dragging .doodle-scrollthumb-bar {
+  width: 8px;
+  background: rgba(43, 43, 43, 0.78);
 }

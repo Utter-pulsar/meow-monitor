@@ -10,10 +10,15 @@
     "url": "https://github.com/Utter-pulsar/meow-monitor.git"
   },
   "main": "electron/main.js",
+  "bin": {
+    "meow": "bin/meow.js"
+  },
   "scripts": {
-    "start": "electron .",
+    "dev": "node scripts/setup-meow-dev.js && electron .",
+    "start": "node scripts/setup-meow-dev.js && electron .",
     "monitor": "node src/monitor.js",
     "icon": "node scripts/make-icon.js",
+    "install:skills": "node scripts/install-skills.js",
     "dist:win": "electron-builder --win --publish never"
   },
   "dependencies": {

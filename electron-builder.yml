@@ -45,6 +45,11 @@ extraResources:
   - from: vendor/vdd
     to: driver
     filter: ['**/*']
+  - from: build/meow.cmd
+    to: meow/meow.cmd
+  - from: SKILLS
+    to: SKILLS
+    filter: ['**/*']
 
 win:
   target:

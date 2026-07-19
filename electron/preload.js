@@ -39,6 +39,14 @@ contextBridge.exposeInMainWorld('moyu', {
   dashGetPanels: () => ipcRenderer.invoke('dash:getPanels'),
   dashGetOrder: () => ipcRenderer.invoke('dash:getOrder'),
   dashSetOrder: (order) => ipcRenderer.invoke('dash:setOrder', order),
+  dashGetLeftMode: () => ipcRenderer.invoke('dash:getLeftMode'),
+  dashSetLeftMode: (mode) => ipcRenderer.invoke('dash:setLeftMode', mode),
+
+  // 赛博消息栏
+  getCyberState: () => ipcRenderer.invoke('cyber:getState'),
+  setCyberBurst: (v) => ipcRenderer.invoke('cyber:setBurst', v),
+  clearCyber: () => ipcRenderer.invoke('cyber:clear'),
+  addCyber: (identity, message) => ipcRenderer.invoke('cyber:add', identity, message),
 
   // mode + extend-screen
   getMode: () => ipcRenderer.invoke('mode:get'),
@@ -51,9 +59,9 @@ contextBridge.exposeInMainWorld('moyu', {
 
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
   closeWindow: () => ipcRenderer.send('window:close'),
-  fitWindow: (h) => ipcRenderer.invoke('window:fit', h),
   onStatus: (cb) => ipcRenderer.on('engine:status', (_e, s) => cb(s)),
   onBlackout: (cb) => ipcRenderer.on('display:blackout', (_e, s) => cb(s)),
+  onCyberState: (cb) => ipcRenderer.on('cyber:state', (_e, s) => cb(s)),
   onUpdateProgress: (cb) => ipcRenderer.on('update:progress', (_e, p) => cb(p)),
   onUpdateDownloaded: (cb) => ipcRenderer.on('update:downloaded', () => cb()),
   onUpdateError: (cb) => ipcRenderer.on('update:error', (_e, m) => cb(m)),

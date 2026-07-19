@@ -1,6 +1,8 @@
 // 摸鱼监控 renderer — wires the little control panel to the main process (window.moyu, from preload).
 const $ = (sel) => document.querySelector(sel);
 let curMode = 'dashboard';
+let curKb = 150;
+let cyberState = null;
 
 // Inject Excalifont + 小赖 (from preload) and paint the cat into the title bar + hero.
 (function brand() {
@@ -28,8 +30,26 @@ let curMode = 'dashboard';
 })();
 
 const LABELS = { running: '运行中', starting: '正在启动…', stopped: '未运行', error: '出错了' };
+let cyberPinned = false;
+let cyberHover = false;
 
 function paintSwitch(input) { input.closest('.switch').classList.toggle('on', input.checked); }
+function syncCyberCard() {
+  const box = $('#cyber-box');
+  if (!box) return;
+  const open = cyberPinned || cyberHover;
+  box.classList.toggle('collapsed', !open);
+  box.classList.toggle('open', open && !cyberPinned);
+  box.classList.toggle('pinned', cyberPinned);
+  $('#cyber-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  $('#cyber-pin').textContent = cyberPinned ? '已固定' : '点击固定';
+  clearTimeout(syncCyberCard._layoutTimer);
+  syncCyberCard._layoutTimer = setTimeout(refreshScrollLayout, open ? 360 : 280);
+}
+function fmtTime(ts) {
+  const d = new Date(ts || Date.now());
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 
 function renderBlackout(s) {
   const sw = $('#sw-blackout');
@@ -41,13 +61,59 @@ function renderBlackout(s) {
 function renderStatus(s) {
   const meta = LABELS[s.state] ? s.state : 'stopped';
   $('#status').className = 'status-card ' + meta;
-  $('#status-text').textContent = s.message || LABELS[meta];
+  let text = s.message || LABELS[meta];
+  if (s.runningMode === 'dashboard') text = `${text} · 仪表盘`;
+  else if (s.runningMode === 'extend') text = `${text} · 扩展屏`;
+  $('#status-text').textContent = text;
   // reflect run state in the on/off switch (setting .checked in JS does NOT fire 'change')
   const busy = s.state === 'running' || s.state === 'starting';
   const sw = $('#sw-run');
   sw.checked = busy;
   sw.disabled = s.state === 'starting';
   paintSwitch(sw);
+}
+
+function renderCyber(state) {
+  cyberState = state;
+  const isCyber = state && state.leftMode === 'cyber';
+  $('#left-cat').classList.toggle('seg-on', !isCyber);
+  $('#left-cyber').classList.toggle('seg-on', isCyber);
+  $('#sw-cyber-burst').checked = !!(state && state.burstEnabled);
+  paintSwitch($('#sw-cyber-burst'));
+  syncCyberCard();
+
+  const list = $('#cyber-list');
+  const oldScrollTop = list.scrollTop;
+  const oldScrollHeight = list.scrollHeight;
+  const oldClientHeight = list.clientHeight;
+  const wasAtBottom = oldClientHeight === 0 || oldScrollHeight - oldScrollTop - oldClientHeight <= 20;
+  const previousLatestSeq = Number(list.dataset.latestSeq) || 0;
+  list.innerHTML = '';
+  const messages = state && Array.isArray(state.messages) ? state.messages : [];
+  $('#cyber-unseen').textContent = messages.length ? `${messages.length} 条 · 可滚动` : '0 条';
+  if (!messages.length) {
+    $('#cyber-preview').classList.add('empty');
+    $('#cyber-empty').textContent = '目前还没有消息。';
+    list.dataset.latestSeq = '0';
+    list.scrollTop = 0;
+  } else {
+    $('#cyber-preview').classList.remove('empty');
+    for (const msg of messages) {
+      const item = document.createElement('div');
+      item.className = 'cyber-item';
+      item.innerHTML =
+        `<div class="cyber-item-head"><span class="cyber-tag" style="color:${msg.accent};border-color:${msg.accent};background:${msg.accent}22">${escapeHtml(msg.identity)}</span>` +
+        `<span class="cyber-item-time">${fmtTime(msg.at)}</span></div>` +
+        `<div class="cyber-item-msg">${escapeHtml(msg.message)}</div>`;
+      list.appendChild(item);
+    }
+    const latestSeq = Number(messages[messages.length - 1].seq) || 0;
+    list.dataset.latestSeq = String(latestSeq);
+    requestAnimationFrame(() => {
+      // Stay with the reader when they have scrolled up; otherwise follow the newest message.
+      list.scrollTop = !previousLatestSeq || wasAtBottom ? list.scrollHeight : oldScrollTop;
+    });
+  }
 }
 
 function applyModeUI(mode) {
@@ -58,7 +124,16 @@ function applyModeUI(mode) {
   $('#arr-open').hidden = !ext;
   $('#qual-box').hidden = !ext;
   $('#arr-box').hidden = ext; // the panel arranger is dashboard-only
+  $('#cyber-box').hidden = ext;
   if (ext) setKnob(curKb);
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ---- dashboard panel arranger (drag the cards to reorder the metric panels, live) ----------
@@ -194,42 +269,107 @@ async function buildArranger() {
   } catch {}
 }
 
-// ---- auto-fit the window to its content so there's no scrollbar by default ------------------
-// Measure the natural content height (titlebar + content box, bottom of the last visible section)
-// and ask the main process to size the window to exactly that. Works whether the window is
-// currently too tall (blank space) or too short (overflowing) because it reads geometry, not the
-// scroll box. If the screen can't fit it, main clamps the height and the styled scrollbar appears.
-function naturalHeight() {
-  const content = document.querySelector('.content');
-  const titlebar = document.querySelector('.titlebar');
-  if (!content) return 0;
-  // Measure from the top so off-screen children read true positions. We don't restore the old
-  // scroll offset: a refit follows immediately, and on a short screen the old offset could be out
-  // of range for the new layout and snap-jump — top is the correct resting place after a refit.
-  content.scrollTop = 0;
-  const kids = [...content.children].filter((k) => {
-    if (k.hidden) return false;
-    const cs = getComputedStyle(k);
-    return cs.display !== 'none' && cs.visibility !== 'hidden';
+// Content can expand, collapse, or receive messages without changing the native window height.
+// Only refresh the hand-drawn scroll thumb after those layout changes.
+let scrollLayoutScheduled = false;
+function refreshScrollLayout() {
+  if (scrollLayoutScheduled) return;
+  scrollLayoutScheduled = true;
+  requestAnimationFrame(() => {
+    scrollLayoutScheduled = false;
+    layoutScrollThumb();
   });
-  const cRect = content.getBoundingClientRect();
-  const cs = getComputedStyle(content);
-  const padBottom = parseFloat(cs.paddingBottom) || 0;
-  const titleH = titlebar ? titlebar.offsetHeight : 0;
-  let bottom = cRect.top + (parseFloat(cs.paddingTop) || 0);
-  if (kids.length) bottom = kids[kids.length - 1].getBoundingClientRect().bottom;
-  return Math.ceil(titleH + (bottom - cRect.top) + padBottom) + 1; // +1px guards a hairline scrollbar
 }
 
-let fitScheduled = false;
-function fitWindow() {
-  if (fitScheduled || !window.moyu.fitWindow) return;
-  fitScheduled = true;
-  requestAnimationFrame(() => {            // let layout settle after any show/hide first
-    fitScheduled = false;
-    const h = naturalHeight();
-    if (h > 0) window.moyu.fitWindow(h);
+function setKnob(kb) {
+  const pos = kbToPos(kb);
+  $('#qual-knob').style.left = (pos * 100) + '%';
+  $('#qual-fill').style.width = (pos * 100) + '%';
+  $('#qual-val').textContent = kb + ' KB';
+}
+
+function setupDoodleScrollbar() {
+  const host = document.querySelector('.content');
+  const thumb = $('#scroll-thumb');
+  if (!host || !thumb) return;
+  let dragging = false;
+  let dragStart = 0;
+  let scrollStart = 0;
+  let raf = 0;
+  let suppressNative = false;
+
+  const layout = () => {
+    raf = 0;
+    const overflow = host.scrollHeight - host.clientHeight;
+    if (overflow <= 1) {
+      thumb.classList.remove('visible');
+      thumb.style.top = '0px';
+      thumb.style.height = '0px';
+      return;
+    }
+    const track = host.clientHeight - 6;
+    const size = Math.max(34, Math.min(track, (host.clientHeight / host.scrollHeight) * track));
+    const maxOffset = Math.max(1, track - size);
+    const ratio = overflow > 0 ? (host.scrollTop / overflow) : 0;
+    const offset = 3 + ratio * maxOffset;
+    thumb.classList.add('visible');
+    thumb.style.height = `${size}px`;
+    thumb.style.top = `${offset}px`;
+  };
+  const schedule = () => {
+    if (raf) return;
+    raf = requestAnimationFrame(layout);
+  };
+
+  layoutScrollThumb = schedule;
+  host.addEventListener('scroll', () => {
+    if (suppressNative) return;
+    schedule();
+  }, { passive: true });
+  host.addEventListener('wheel', () => {
+    suppressNative = false;
+    schedule();
+  }, { passive: true });
+  window.addEventListener('resize', schedule);
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(schedule);
+    observer.observe(host);
+    for (const child of host.children) if (child !== thumb) observer.observe(child);
+    setupDoodleScrollbar._resizeObserver = observer;
+  }
+  thumb.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    dragStart = e.clientY;
+    scrollStart = host.scrollTop;
+    thumb.classList.add('dragging');
+    try { thumb.setPointerCapture(e.pointerId); } catch {}
   });
+  thumb.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const track = host.clientHeight - 6;
+    const size = thumb.getBoundingClientRect().height;
+    const overflow = host.scrollHeight - host.clientHeight;
+    const maxOffset = Math.max(1, track - size);
+    const delta = e.clientY - dragStart;
+    suppressNative = true;
+    host.scrollTop = Math.max(0, Math.min(overflow, scrollStart + (delta / maxOffset) * overflow));
+    schedule();
+  });
+  const endDrag = (e) => {
+    dragging = false;
+    suppressNative = false;
+    thumb.classList.remove('dragging');
+    try { thumb.releasePointerCapture(e.pointerId); } catch {}
+    schedule();
+  };
+  thumb.addEventListener('pointerup', endDrag);
+  thumb.addEventListener('pointercancel', endDrag);
+  requestAnimationFrame(layout);
+}
+let layoutScrollThumb = () => {};
+
+async function loadCyber() {
+  try { renderCyber(await window.moyu.getCyberState()); } catch {}
 }
 
 async function init() {
@@ -241,16 +381,20 @@ async function init() {
   $('#version').textContent = 'v' + (cfg.version || '0.0.0');
   await loadQuality();
   await buildArranger();
+  setupDoodleScrollbar();
   applyModeUI(cfg.mode || 'dashboard');
   renderStatus(await window.moyu.getStatus());
   renderBlackout(await window.moyu.getBlackout());
-  // size to fit once the (large, async) Xiaolai font has settled so the measurement is final
+  await loadCyber();
+  syncCyberCard();
+  // Font metrics can alter overflow, but the user-selected native window height stays untouched.
   try { await document.fonts.ready; } catch {}
-  fitWindow();
+  refreshScrollLayout();
 }
 
-window.moyu.onStatus(renderStatus);
+window.moyu.onStatus((s) => { renderStatus(s); refreshScrollLayout(); });
 window.moyu.onBlackout(renderBlackout);
+window.moyu.onCyberState((s) => { renderCyber(s); refreshScrollLayout(); });
 
 // the run on/off switch IS the start/stop control
 $('#sw-run').addEventListener('change', (e) => {
@@ -258,29 +402,41 @@ $('#sw-run').addEventListener('change', (e) => {
   else window.moyu.stop();
 });
 
-// mode toggle (仪表盘 / 扩展屏) — each mode has different content height, so refit afterwards
-$('#mode-dash').addEventListener('click', async () => { applyModeUI(await window.moyu.setMode('dashboard')); fitWindow(); });
+// Mode/content changes only update the inner scroll area; they never resize the native window.
+$('#mode-dash').addEventListener('click', async () => { applyModeUI(await window.moyu.setMode('dashboard')); refreshScrollLayout(); });
 $('#mode-ext').addEventListener('click', async () => {
   applyModeUI(await window.moyu.setMode('extend'));
-  fitWindow();
+  refreshScrollLayout();
   const ready = await window.moyu.vddReady();
   if (!ready) $('#status-text').textContent = '扩展屏驱动尚未安装（需先安装一次）';
+});
+
+$('#left-cat').addEventListener('click', async () => { renderCyber(await window.moyu.dashSetLeftMode('cat')); refreshScrollLayout(); });
+$('#left-cyber').addEventListener('click', async () => { renderCyber(await window.moyu.dashSetLeftMode('cyber')); refreshScrollLayout(); });
+$('#cyber-clear').addEventListener('click', async () => { renderCyber(await window.moyu.clearCyber()); refreshScrollLayout(); });
+$('#sw-cyber-burst').addEventListener('change', async (e) => {
+  paintSwitch(e.target);
+  renderCyber(await window.moyu.setCyberBurst(e.target.checked));
+  refreshScrollLayout();
+});
+$('#cyber-box').addEventListener('mouseenter', () => { cyberHover = true; syncCyberCard(); refreshScrollLayout(); });
+$('#cyber-box').addEventListener('mouseleave', () => { cyberHover = false; syncCyberCard(); refreshScrollLayout(); });
+$('#cyber-toggle').addEventListener('click', () => { cyberPinned = !cyberPinned; syncCyberCard(); refreshScrollLayout(); });
+$('#cyber-body').addEventListener('click', () => {
+  if (!cyberPinned) {
+    cyberPinned = true;
+    syncCyberCard();
+    refreshScrollLayout();
+  }
 });
 
 $('#arr-open').addEventListener('click', () => window.moyu.openExternal('ms-settings:display'));
 
 // extend-screen clarity slider — drag to find the sharp-but-not-garbled sweet spot (applies live)
 const KB_MIN = 40, KB_MAX = 340;
-let curKb = 150;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 const kbToPos = (kb) => clamp01((kb - KB_MIN) / (KB_MAX - KB_MIN));
 const posToKb = (pos) => Math.round(KB_MIN + clamp01(pos) * (KB_MAX - KB_MIN));
-function setKnob(kb) {
-  const pos = kbToPos(kb);
-  $('#qual-knob').style.left = (pos * 100) + '%';
-  $('#qual-fill').style.width = (pos * 100) + '%';
-  $('#qual-val').textContent = kb + ' KB';
-}
 async function loadQuality() { try { curKb = await window.moyu.extendGetQuality(); setKnob(curKb); } catch {} }
 (function setupQualSlider() {
   const track = $('#qual-track'); if (!track) return;

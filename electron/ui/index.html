@@ -39,6 +39,41 @@
         <div class="arr-grid" id="arr-grid"></div>
       </section>
 
+      <section id="cyber-box" class="cyber-box collapsed" hidden>
+        <button id="cyber-toggle" class="cyber-toggle" type="button" aria-expanded="false" title="展开或固定赛博消息栏">
+          <span class="cyber-toggle-title">赛博消息栏</span>
+          <span id="cyber-pin" class="cyber-pin">临时展开</span>
+        </button>
+        <div id="cyber-body" class="cyber-body">
+          <div class="cyber-head">
+            <div>
+              <span>赛博消息栏</span>
+              <small>左侧显示月薪喵，还是 AI / agent 汇报流</small>
+            </div>
+            <button id="cyber-clear" class="btn-mini">清空消息</button>
+          </div>
+
+          <div class="cyber-mode" id="cyber-mode">
+            <button id="left-cat" class="seg">🐱&nbsp;月薪喵</button>
+            <button id="left-cyber" class="seg">📡&nbsp;赛博消息栏</button>
+          </div>
+
+          <label class="row row-tight">
+            <span class="row-label">叮！提醒动画<small>新消息到来时，从消息右侧弹一下</small></span>
+            <span class="switch"><input type="checkbox" id="sw-cyber-burst" /><span class="knob"></span></span>
+          </label>
+
+          <div id="cyber-preview" class="cyber-preview empty">
+            <div class="cyber-preview-head">
+              <span>消息历史</span>
+              <small id="cyber-unseen">0 条新消息</small>
+            </div>
+            <div id="cyber-empty" class="cyber-empty">目前还没有消息。</div>
+            <div id="cyber-list" class="cyber-list" tabindex="0" aria-label="赛博消息历史"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="run-row">
         <button id="arr-open" class="btn-open" hidden>🖥️&nbsp;显示设置</button>
         <div id="status" class="status-card stopped">
@@ -78,6 +113,7 @@
       </footer>
       <div id="dl-bar" class="dl-bar" hidden><div id="dl-fill" class="dl-fill"></div></div>
       <p id="update-msg" class="update-msg"></p>
+      <div id="scroll-thumb" class="doodle-scrollthumb"><div class="doodle-scrollthumb-bar"></div></div>
     </main>
 
     <script src="renderer.js"></script>

@@ -1,7 +1,7 @@
 // Engine worker — runs inside an Electron utilityProcess so the heavy USB/render loop never
 // blocks the GUI, and so the N-API native modules (usb, @napi-rs/canvas) load against Electron.
 // Talks to the main process over parentPort:
-//   in : { type: 'start', fps, order } | { type: 'stop' } | { type: 'order', order }
+//   in : { type: 'start', fps, order, cyber } | { type: 'stop' } | { type: 'order', order } | { type: 'cyber', cyber }
 //   out: { type: 'status', state, message }
 const { runMonitor } = require('./monitor');
 
@@ -15,9 +15,11 @@ process.parentPort.on('message', async (e) => {
   const msg = (e && e.data) || {};
   if (msg.type === 'start') {
     if (handle && !handle.stopped) return; // already running
-    handle = await runMonitor({ fps: msg.fps || 12, order: msg.order, blanked: !!msg.blanked, onStatus: send });
+    handle = await runMonitor({ fps: msg.fps || 12, order: msg.order, blanked: !!msg.blanked, cyber: msg.cyber, onStatus: send });
   } else if (msg.type === 'order') {
     if (handle && !handle.stopped) handle.setOrder(msg.order); // live reorder
+  } else if (msg.type === 'cyber') {
+    if (handle && !handle.stopped) handle.setCyber(msg.cyber || null);
   } else if (msg.type === 'blank') {
     if (handle && !handle.stopped) handle.setBlank(!!msg.value);
   } else if (msg.type === 'stop') {

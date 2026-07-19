@@ -43,12 +43,13 @@ async function loadCatFrames() {
  * the render loop runs in the background and reports progress through onStatus(state, message),
  * where state is one of: 'starting' | 'running' | 'error' | 'stopped'.
  */
-async function runMonitor({ fps = 12, order, blanked = false, onStatus = () => {} } = {}) {
+async function runMonitor({ fps = 12, order, blanked = false, cyber = null, onStatus = () => {} } = {}) {
   let stopping = false;
   let dev = null;
   let metrics = null;
   let dash = null;          // created during startup below
   let pendingOrder = order; // remembered until dash exists (covers a reorder mid-startup)
+  let pendingCyber = cyber; // remembered until dash exists
   let wantBlank = !!blanked;
   let appliedBlank = false;
   const status = (state, message) => { try { onStatus(state, message); } catch {} };
@@ -62,6 +63,7 @@ async function runMonitor({ fps = 12, order, blanked = false, onStatus = () => {
     stopped: false,
     // live panel reorder pushed from the control panel; applies to the next rendered frame
     setOrder(o) { pendingOrder = o; if (dash) dash.setOrder(o); },
+    setCyber(state) { pendingCyber = state; if (dash) dash.setCyber(state); },
     setBlank(v) { wantBlank = !!v; },
     async stop() { stopping = true; await done; },
   };
@@ -72,7 +74,7 @@ async function runMonitor({ fps = 12, order, blanked = false, onStatus = () => {
       const cats = await loadCatFrames();
       if (stopping) return;
       metrics = new Metrics().start(1000);
-      dash = new Dashboard(pendingOrder);
+      dash = new Dashboard(pendingOrder, pendingCyber);
       if (stopping) return;
       status('starting', '正在连接屏幕…');
       dev = new TurzxDevice();
