@@ -7,7 +7,7 @@ const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const binDir = path.join(root, 'bin');
 const shellDir = path.join(os.homedir(), '.meow-monitor');
-const cmdPath = path.join(shellDir, 'meow.cmd');
+const cmdPath = path.join(shellDir, 'meow-dev.cmd');
 
 fs.mkdirSync(shellDir, { recursive: true });
 const content = [
@@ -37,6 +37,6 @@ if (process.platform === 'win32') {
   if (res.stderr.trim()) console.warn(res.stderr.trim());
 }
 
-console.log('Created dev meow launcher:');
+console.log('Created development meow launcher:');
 console.log(cmdPath);
-console.log('Restart your terminal if `meow` is still not found.');
+console.log('Restart your terminal if `meow-dev` is still not found.');

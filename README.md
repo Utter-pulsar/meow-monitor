@@ -87,8 +87,10 @@ npm run start
 
 它会：
 
-- 在 `~/.meow-monitor/meow.cmd` 生成一个开发版 launcher
+- 在 `~/.meow-monitor/meow-dev.cmd` 生成一个开发版 launcher
 - 自动把 `~/.meow-monitor` 加进你当前用户的 PATH（Windows）
+
+开发版命令使用 `meow-dev`，避免覆盖安装包提供的 `meow`。
 
 如果你只是想单独准备一次开发环境，也可以手动执行：
 
@@ -100,8 +102,8 @@ node scripts/setup-meow-dev.js
 
 如果你安装的是发布版 setup.exe，安装器会自动：
 
-- 放置 `meow.cmd`
-- 把对应目录加入用户 PATH
+- 把 `meow.cmd` 放在安装目录的 `resources/meow` 下
+- 把该安装目录加入用户 PATH，并迁移旧版 `~/.meow-monitor/meow.cmd`
 
 这样新开的终端里就能直接敲 `meow`。
 

@@ -32,15 +32,15 @@ npm run dev
 # 或 npm run start
 ```
 
-这会自动准备开发版 `meow` launcher，并尝试把 `~/.meow-monitor` 放进 PATH。
+这会自动准备开发版 `meow-dev` launcher，并尝试把 `~/.meow-monitor` 放进 PATH。发布安装版继续使用 `meow`，两者不会互相覆盖。
 
 命令：
 
 ```bash
-meow "claude" "I already finished it, come take a look"
-meow "agent" "I need you to choose between A and B"
-meow clear
-meow help
+meow-dev "claude" "I already finished it, come take a look"
+meow-dev "agent" "I need you to choose between A and B"
+meow-dev clear
+meow-dev help
 ```
 
 退出码：

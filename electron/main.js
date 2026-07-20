@@ -11,6 +11,7 @@ const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, shell, utilityProc
 const os = require('node:os');
 const { ExtendEngine } = require('../src/extend');
 const { createCyberServer, cyberPipePath } = require('../src/cyber-bridge');
+const { runCli } = require('../bin/meow');
 const { CyberStore } = require('../src/cyber-store');
 const vdd = require('../src/vdd');
 const { PANELS_META, DEFAULT_ORDER, normalizeOrder } = require('../src/panels');
@@ -484,7 +485,12 @@ ipcMain.on('window:minimize', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('window:close', () => { if (settings.minimizeToTray) mainWindow.hide(); else app.quit(); });
 
 // ---- lifecycle --------------------------------------------------------------------------
-if (!app.requestSingleInstanceLock()) {
+const cliMarker = process.argv.findIndex((arg) => arg === 'meow-cli' || arg === '--cli');
+if (cliMarker >= 0) {
+  const cliArgs = process.argv.slice(cliMarker + 1);
+  if (cliArgs[0] === 'meow') cliArgs.shift();
+  runCli(cliArgs).then((code) => app.exit(code)).catch(() => app.exit(3));
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', showWindow);

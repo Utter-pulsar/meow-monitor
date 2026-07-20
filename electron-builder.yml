@@ -10,6 +10,7 @@ directories:
 # Only docs / dev junk are stripped. (electron-builder always ships production dependencies.)
 files:
   - electron/**/*
+  - bin/**/*
   - src/**/*
   - assets/**/*
   - fonts/**/*
