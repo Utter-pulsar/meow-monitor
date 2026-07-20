@@ -53,6 +53,7 @@ extraResources:
     filter: ['**/*']
 
 win:
+  executableName: meow-monitor
   target:
     - target: nsis
       arch:
